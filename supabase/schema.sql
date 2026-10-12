@@ -21,6 +21,7 @@ create table public.members (
   room_id text not null default 'hub' references public.rooms(id),
   status text not null default 'available' check (status in ('available','focus','away')),
   daily_note text not null default '' check (char_length(daily_note) <= 240),
+  avatar_url text not null default '',
   last_seen timestamptz,
   created_at timestamptz not null default now()
 );
@@ -104,6 +105,14 @@ begin
   if not found then raise exception 'not_allowed'; end if;
 end;
 $$;
+create function public.update_my_identity(p_name text,p_avatar text default '') returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.is_active_member() then raise exception 'not_allowed'; end if;
+  if char_length(trim(p_name)) not between 1 and 80 then raise exception 'invalid_name'; end if;
+  update public.members set name=trim(p_name),avatar_url=trim(p_avatar) where user_id=auth.uid() and active;
+  if not found then raise exception 'not_allowed'; end if;
+end;
+$$;
 create function public.send_knock(p_receiver uuid,p_room text) returns void language plpgsql security definer set search_path = '' as $$
 begin
   if not public.is_active_member() then raise exception 'not_allowed'; end if;
@@ -161,8 +170,8 @@ end;
 $$;
 
 -- Explicit grants: anonymous callers cannot execute office functions.
-revoke all on function public.is_active_member(),public.is_office_admin(),public.claim_membership(),public.heartbeat(),public.leave_office(),public.update_my_profile(text,text,text),public.send_knock(uuid,text),public.respond_knock(uuid,boolean),public.admin_list_members(),public.admin_upsert_member(text,text,boolean,boolean),public.admin_set_meeting(text,text),public.admin_post_announcement(text,text) from public,anon;
-grant execute on function public.is_active_member(),public.is_office_admin(),public.claim_membership(),public.heartbeat(),public.leave_office(),public.update_my_profile(text,text,text),public.send_knock(uuid,text),public.respond_knock(uuid,boolean),public.admin_list_members(),public.admin_upsert_member(text,text,boolean,boolean),public.admin_set_meeting(text,text),public.admin_post_announcement(text,text) to authenticated;
+revoke all on function public.is_active_member(),public.is_office_admin(),public.claim_membership(),public.heartbeat(),public.leave_office(),public.update_my_profile(text,text,text),public.update_my_identity(text,text),public.send_knock(uuid,text),public.respond_knock(uuid,boolean),public.admin_list_members(),public.admin_upsert_member(text,text,boolean,boolean),public.admin_set_meeting(text,text),public.admin_post_announcement(text,text) from public,anon;
+grant execute on function public.is_active_member(),public.is_office_admin(),public.claim_membership(),public.heartbeat(),public.leave_office(),public.update_my_profile(text,text,text),public.update_my_identity(text,text),public.send_knock(uuid,text),public.respond_knock(uuid,boolean),public.admin_list_members(),public.admin_upsert_member(text,text,boolean,boolean),public.admin_set_meeting(text,text),public.admin_post_announcement(text,text) to authenticated;
 
 -- Postgres Changes respect SELECT RLS. No public Broadcast/Presence channels.
 alter publication supabase_realtime add table public.members,public.rooms,public.announcements,public.knocks;
