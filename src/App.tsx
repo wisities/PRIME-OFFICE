@@ -9,7 +9,7 @@ type Page = 'office'|'team'|'today'|'announcements'|'admin';
 type Knock = {id:string; sender: string; receiver_id?:string; room_id:RoomId; state:string; created_at:string};
 type Notice = {id:string; title:string; body:string};
 const nav = [{id:'office',label:'ออฟฟิศของเรา',icon:Home},{id:'team',label:'สมาชิกทีม',icon:Users},{id:'today',label:'งานวันนี้',icon:ClipboardList},{id:'announcements',label:'บอร์ดประกาศ',icon:Megaphone},{id:'admin',label:'ผู้ดูแลระบบ',icon:Settings}] as const;
-function Avatar({member,small=false}:{member:Member;small?:boolean}) {return <span className={`avatar ${member.color} ${small?'small':''}`} aria-label={member.name}><span className="avatar-face">{['may','nan','ploy','beam','offline-0','offline-5'].includes(member.id)?'👩🏻‍💻':'👨🏻‍💻'}</span><i className={`status-dot ${member.online?member.status:'offline'}`}/></span>;}
+function Avatar({member,small=false}:{member:Member;small?:boolean}) {return <span className={`avatar ${member.color} ${small?'small':''}`} aria-label={member.name}>{member.avatarUrl?<img src={member.avatarUrl} alt={member.name} className="avatar-img"/>:<span className="avatar-face">{['may','nan','ploy','beam','offline-0','offline-5'].includes(member.id)?'👩🏻‍💻':'👨🏻‍💻'}</span>}<i className={`status-dot ${member.online?member.status:'offline'}`}/></span>;}
 function errorText(error:unknown) { const raw = error && typeof error==='object' && 'message' in error ? String(error.message) : String(error); if(raw.includes('not_allowed'))return 'อีเมลนี้ยังไม่ได้รับสิทธิ์ หรือถูกปิดใช้งาน กรุณาติดต่อผู้ดูแล';if(raw.includes('member_limit'))return 'สมาชิกที่เปิดใช้งานครบ 15 คนแล้ว';if(raw.includes('rate_limit'))return 'เพิ่งส่งคำขอไป กรุณารอ 30 วินาทีก่อนส่งอีกครั้ง';if(raw.includes('self_disable'))return 'ไม่สามารถปิดสิทธิ์หรือลดสิทธิ์ผู้ดูแลของตัวเองได้';return raw; }
 
 export default function App() {
@@ -32,10 +32,11 @@ export default function App() {
     const results=await Promise.all([supabase.from('members').select('*').eq('active',true).order('name'),supabase.from('rooms').select('*').order('sort_order'),supabase.from('announcements').select('*').order('created_at',{ascending:false}),supabase.from('knocks').select('*').order('created_at',{ascending:false}).limit(20),supabase.from('office_presence').select('*')]);
     const failure=results.find(r=>r.error)?.error;if(failure)throw failure;
     const rows=results[0].data||[];if(!rows.some(r=>r.user_id===session.user.id)){setLiveMembers([]);setLoaded(false);throw Error('not_allowed');}
-    setLiveMembers(rows.map((r,i)=>({id:r.user_id||r.id,name:r.name,role:r.role||'ทีม PRIME',room:r.room_id,status:r.status,online:(results[4].data||[]).some(p=>p.user_id===r.user_id&&Date.now()-new Date(p.last_seen).getTime()<90000),color:['blue','mint','peach','lavender'][i%4],note:r.daily_note,isAdmin:r.is_admin})));
+    const myGoogleAvatar = session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture;
+    setLiveMembers(rows.map((r,i)=>({id:r.user_id||r.id,name:r.name,role:r.role||'ทีม PRIME',room:r.room_id,status:r.status,online:(results[4].data||[]).some(p=>p.user_id===r.user_id&&Date.now()-new Date(p.last_seen).getTime()<90000),color:['blue','mint','peach','lavender'][i%4],note:r.daily_note,isAdmin:r.is_admin,avatarUrl:r.user_id===session?.user?.id?myGoogleAvatar:undefined})));
     setRooms((results[1].data||[]).map(r=>({...initialRooms.find(x=>x.id===r.id)!,meet_url:r.meet_url||''})));
     setNotices(results[2].data||[]);setKnocks((results[3].data||[]).map(k=>({...k,sender:rows.find(r=>r.user_id===k.sender_id)?.name||'สมาชิก'})));setLoaded(true);
-  },[session?.user.id,demo]);
+  },[session?.user.id,session?.user?.user_metadata?.avatar_url,session?.user?.user_metadata?.picture,demo]);
   useEffect(()=>{
     if(demo||!supabase||!session){setConnected(false);return;}
     const client=supabase;let cancelled=false;setLoaded(false);setError('');
@@ -46,7 +47,9 @@ export default function App() {
     const interval=setInterval(()=>void heartbeat(),30000);const fallback=setInterval(()=>void sync(),60000);
     return()=>{cancelled=true;clearInterval(interval);clearInterval(fallback);void client.removeChannel(channel);};
   },[demo,session?.user.id,refresh]);
-  const me:Member=demo?{id:'me',name:'คุณ',role:'ทีม PRIME',room:demoState.room as RoomId,status:demoState.status as Status,online:true,color:'blue',note:demoState.note,isAdmin:true}:liveMembers.find(m=>m.id===session?.user.id)||{id:'',name:'สมาชิก',role:'ทีม PRIME',room:'hub',status:'available',online:false,color:'blue'};
+  const userAvatar = session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture;
+  const currentLive = liveMembers.find(m=>m.id===session?.user.id);
+  const me:Member=demo?{id:'me',name:'คุณ',role:'ทีม PRIME',room:demoState.room as RoomId,status:demoState.status as Status,online:true,color:'blue',note:demoState.note,isAdmin:true}:(currentLive?{...currentLive,avatarUrl:currentLive.avatarUrl||userAvatar}:{id:session?.user?.id||'',name:session?.user?.user_metadata?.full_name||'สมาชิก',role:'ทีม PRIME',room:'hub',status:'available',online:false,color:'blue',avatarUrl:userAvatar});
   const members=demo?[me,...sampleMembers]:liveMembers;
   const room=rooms.find(r=>r.id===selected)||initialRooms[0];
   const online=members.filter(m=>m.online),occupants=online.filter(m=>m.room===selected);

@@ -1,6 +1,6 @@
 export type RoomId = 'hub' | 'project' | 'focus' | 'coffee';
 export type Status = 'available' | 'focus' | 'away';
-export type Member = { id:string; name:string; role:string; room:RoomId; status:Status; online:boolean; color:string; note?:string; isAdmin?:boolean };
+export type Member = { id:string; name:string; role:string; room:RoomId; status:Status; online:boolean; color:string; note?:string; isAdmin?:boolean; avatarUrl?:string };
 export type Room = { id:RoomId; name:string; thai:string; description:string; meet_url?:string; task:string };
 export const rooms:Room[] = [
   {id:'hub',name:'PRIME Hub',thai:'พื้นที่ทำงานกลาง',description:'เริ่มวันใหม่ แบ่งปันไอเดีย และทำงานไปด้วยกัน',task:'อัปเดตสิ่งที่ทำวันนี้ให้ทีมรู้'},
