@@ -15,3 +15,14 @@ export function loadDemo(storage) {
   try { const data = JSON.parse(storage.getItem('prime-demo-v1') || '{}'); return { room: ['hub','project','focus','coffee'].includes(data.room) ? data.room : 'hub', status: ['available','focus','away'].includes(data.status) ? data.status : 'available', note: typeof data.note === 'string' ? data.note.slice(0, 240) : '' }; }
   catch { return { room: 'hub', status: 'available', note: '' }; }
 }
+export function checkAttendanceStatus(date) {
+  const d = new Date(date);
+  const hours = d.getHours();
+  const minutes = d.getMinutes();
+  return (hours > 8 || (hours === 8 && minutes > 5)) ? 'late' : 'on_time';
+}
+export function formatThaiTime(dateStr) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} น.`;
+}

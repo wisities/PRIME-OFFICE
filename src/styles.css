@@ -8,3 +8,115 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 .video-backdrop{position:fixed;inset:0;background:#0d1d2be6;backdrop-filter:blur(8px);z-index:250;display:flex;align-items:center;justify-content:center;padding:16px}.video-window{background:#13222e;border-radius:18px;width:min(1240px,96vw);height:min(820px,92vh);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 90px #00000080;border:1px solid #ffffff1a}.video-window-header{height:54px;background:#172e3f;display:flex;align-items:center;justify-content:space-between;padding:0 18px;color:#fff;border-bottom:1px solid #ffffff12;flex-shrink:0}.video-window-header strong{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:#f0f6fa}.video-window-header .tiny-tag{background:#41a27e;color:#fff;font-size:10px;padding:2px 8px;border-radius:12px;font-weight:500}.video-window-controls{display:flex;align-items:center;gap:8px}.video-window-controls button,.video-window-controls a{background:#ffffff17;color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-decoration:none}.video-window-controls button:hover,.video-window-controls a:hover{background:#ffffff2b}.video-window-controls .btn-close{background:#b84938}.video-window-controls .btn-close:hover{background:#d25340}.video-body{flex:1;background:#0f1820;position:relative}.video-iframe{width:100%;height:100%;border:0}
 .profile-badge-btn{display:flex;align-items:center;gap:8px;background:#edf3f6;border:1px solid var(--line);padding:3px 12px 3px 3px;border-radius:24px;cursor:pointer;transition:all .15s}.profile-badge-btn:hover{background:#e3ecf0;border-color:#c8d7df}.my-name-tag{font-size:11px;font-weight:600;color:#29465b;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.avatar-preview-box{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:18px}.avatar-preview-box .avatar{width:68px;height:68px}.avatar-preview-box .avatar-face{font-size:44px}.emoji-selector{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 16px;justify-content:center}.emoji-btn{width:42px;height:42px;font-size:22px;border-radius:10px;background:#f4f7f9;border:2px solid transparent;display:grid;place-items:center;cursor:pointer;transition:all .15s}.emoji-btn:hover{transform:scale(1.08);background:#eaf0f4}.emoji-btn.active{border-color:#1c4d6b;background:#dfebf3}.quick-options{display:flex;gap:8px;margin-top:8px;justify-content:center}.quick-options button{font-size:10px;padding:5px 10px;border-radius:6px;background:#f0f4f7;color:#496577}
+
+/* Attendance & Leave Styles */
+.avatar-leave-badge{position:absolute;top:-4px;left:-4px;font-size:12px;background:#fff;border-radius:50%;width:18px;height:18px;display:grid;place-items:center;box-shadow:0 2px 6px #0000002b;line-height:1}
+.leave-cnt{background:#f3e8f8!important;color:#7e3e9d!important;font-weight:600}
+.leave-pill-tag{font-size:10px;color:#85499f;background:#f6ecfb;padding:2px 7px;border-radius:10px}
+.member-leave-tag{display:inline-block;margin-left:6px;font-size:10px;background:#faedfa;color:#84349e;padding:1px 6px;border-radius:4px;vertical-align:middle}
+
+.topbar-checkin-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:6px 12px;border-radius:20px;border:1px solid transparent;cursor:pointer;transition:all .15s}
+.topbar-checkin-pill.cta{background:#edf6fb;color:#1d506d;border-color:#c8dfec;font-weight:600}
+.topbar-checkin-pill.cta:hover{background:#dfedf6}
+.topbar-checkin-pill .pill-target{font-size:9px;background:#d3e8f4;color:#18455e;padding:1px 5px;border-radius:4px;margin-left:2px}
+.topbar-checkin-pill.active{background:#ecf8f3;color:#24644a;border-color:#bfe5d4}
+.topbar-checkin-pill.active:hover{background:#e0f3ea}
+.topbar-checkin-pill .pill-badge{font-size:9px;border-radius:4px;padding:1px 5px;font-weight:600}
+.topbar-checkin-pill .pill-badge.on_time{background:#d5f0e3;color:#1d6e49}
+.topbar-checkin-pill .pill-badge.late{background:#faedd9;color:#9b651b}
+.topbar-checkin-pill .pill-action{color:#769b8b;font-size:10px}
+.topbar-checkin-pill.completed{background:#f4f7f9;color:#5a7384;border-color:#dce5ea;cursor:default}
+
+.att-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-bottom:24px}
+.kpi-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px}
+.kpi-icon{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;flex-shrink:0}
+.kpi-icon.blue{background:#edf5fb;color:#2c6f96}
+.kpi-icon.green{background:#ebf7f1;color:#338865}
+.kpi-icon.amber{background:#fbf3e5;color:#b47e2c}
+.kpi-icon.purple{background:#f6edf9;color:#85439c}
+.kpi-card small{display:block;font-size:11px;color:#7e93a0}
+.kpi-card strong{font-size:22px;letter-spacing:-.5px;color:#193f5b}
+.kpi-card .kpi-divider{color:#cbd7df;margin:0 3px}
+.kpi-card .kpi-warn{color:#c77d24}
+.kpi-card .kpi-sub{display:block;font-size:10px;color:#98a7b1;margin-top:2px}
+
+.att-layout-grid{display:grid;grid-template-columns:1fr 1.35fr;gap:20px;align-items:start}
+.att-left-col,.att-right-col{display:grid;gap:20px}
+.att-box{padding:22px}
+.att-box-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px}
+.att-box-header h2{font-size:17px;display:flex;align-items:center;gap:8px;margin:0}
+.att-box-header p{font-size:11px;color:#7a909d;margin-top:4px}
+.live-clock-badge{display:inline-flex;align-items:center;gap:6px;background:#f0f5f8;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;color:#284a62;white-space:nowrap}
+
+.my-att-summary-card{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;background:#f8fafb;border:1px solid #e2eaee;border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.att-time-cell{display:flex;flex-direction:column;gap:3px}
+.att-time-cell small{font-size:10px;color:#7f95a2}
+.att-time-cell strong{font-size:18px;color:#1a415e}
+.att-time-divider{width:1px;height:42px;background:#dbe5eb;margin:0 12px}
+.status-tag{display:inline-block;font-size:9px;border-radius:4px;padding:2px 6px;width:max-content;font-weight:600}
+.status-tag.on_time{background:#d8f3e5;color:#1c734b}
+.status-tag.late{background:#faedd5;color:#b26f1a}
+.status-tag.finished{background:#e7f0f6;color:#2f5f7f}
+.status-tag.in-progress{background:#e9f4ee;color:#358863}
+.sub-hint{font-size:9px;color:#9cb0bb}
+
+.att-actions-row{margin-top:6px}
+.att-btn-lg{width:100%;min-height:46px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.att-btn-lg.checkout{background:#29654d}
+.att-btn-lg.checkout:hover{background:#235741}
+.att-done-banner{display:flex;align-items:center;gap:10px;background:#ecf8f3;color:#276b4e;border:1px solid #bce6d2;padding:12px 16px;border-radius:10px;font-size:12px}
+
+.leave-form{display:grid;gap:14px;margin-bottom:20px}
+.leave-type-selector{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px}
+.leave-type-chip{display:flex;flex-direction:column;align-items:center;gap:4px;background:#f7f9fa;border:1.5px solid #dce4e9;padding:10px 6px;border-radius:10px;cursor:pointer;transition:all .15s}
+.leave-type-chip:hover{background:#edf3f6}
+.leave-type-chip.active{border-color:#1c4d6b;background:#eef5f9;box-shadow:0 2px 8px #173f6114}
+.chip-emoji{font-size:22px;line-height:1}
+.chip-label{font-size:11px;font-weight:600;color:#2c4e66}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:grid;gap:6px}
+.form-group label{font-size:11px;color:#6f8694;font-weight:500}
+
+.my-leaves-history{border-top:1px solid var(--line);padding-top:18px;margin-top:8px}
+.leave-history-list{display:grid;gap:10px;margin-top:12px;max-height:220px;overflow:auto}
+.leave-item-row{display:flex;align-items:center;gap:10px;background:#fbfcfd;border:1px solid #e7edf0;padding:10px 14px;border-radius:10px}
+.leave-item-icon{font-size:20px;flex-shrink:0}
+.leave-item-body{flex:1;min-width:0}
+.leave-item-body strong{display:block;font-size:12px;color:#23445c}
+.leave-item-body .period-tag{font-size:9px;background:#e7f0f6;color:#2a5a7b;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:500}
+.leave-item-body small{display:block;font-size:10px;color:#7f939f;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.att-filter-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.chip-btn{background:#f3f6f8;color:#6d8492;font-size:11px;padding:6px 12px;border-radius:20px;border:1px solid transparent;cursor:pointer;transition:all .15s}
+.chip-btn:hover{background:#e7edf1}
+.chip-btn.active{background:#1c4d6b;color:#fff;font-weight:600}
+
+.team-att-table{display:grid;gap:8px}
+.team-att-row{display:grid;grid-template-columns:1.4fr 1.2fr 0.8fr;align-items:center;gap:12px;padding:10px 14px;background:#fbfcfd;border:1px solid #e6ecf0;border-radius:10px}
+.team-att-user{display:flex;align-items:center;gap:10px;min-width:0}
+.team-att-user strong{font-size:12px;color:#234157;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.team-att-user small{font-size:10px;color:#859ba7;display:block}
+.team-att-status{min-width:0}
+.checkin-info{display:flex;flex-direction:column;gap:2px}
+.badge-time{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;width:max-content}
+.badge-time.on_time{background:#def2e7;color:#187046}
+.badge-time.late{background:#fbedd9;color:#b16b14}
+.checkout-time{font-size:9px;color:#849aa5;margin-left:3px}
+.badge-leave{display:inline-block;font-size:10px;background:#faedfa;color:#84349e;padding:3px 8px;border-radius:6px;font-weight:600}
+.badge-not-in{font-size:10px;color:#9cb0bb;background:#edf2f5;padding:3px 8px;border-radius:6px}
+.team-att-room{text-align:right}
+.team-att-room small{font-size:10px;color:#6b8493;background:#eef4f7;padding:3px 8px;border-radius:6px}
+
+@media(max-width:1050px){
+  .att-layout-grid{grid-template-columns:1fr}
+  .team-att-row{grid-template-columns:1.2fr 1fr}
+  .team-att-room{display:none}
+}
+@media(max-width:600px){
+  .my-att-summary-card{grid-template-columns:1fr;gap:12px}
+  .att-time-divider{display:none}
+  .leave-type-selector{grid-template-columns:repeat(2,1fr)}
+  .form-row{grid-template-columns:1fr}
+  .team-att-row{grid-template-columns:1fr;gap:8px}
+  .team-att-status{padding-left:44px}
+}
