@@ -92,8 +92,6 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const audioStreamRef = useRef<MediaStream | null>(null);
-  const jitsiAudioApiRef = useRef<any>(null);
-  const audioBridgeContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
@@ -330,23 +328,33 @@ export default function App() {
   useEffect(() => { setNote(me.note || ''); }, [me.note, demo]);
   const joinHuddle = useCallback(async (targetRoomId: RoomId) => {
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch((err) => {
+          console.warn('Microphone permission or hardware access issue:', err);
+          return null;
+        });
         audioStreamRef.current = stream;
       }
-    } catch {}
+    } catch (err) {
+      console.warn('getUserMedia check error:', err);
+    }
     setInHuddle(true);
     setHuddleRoomId(targetRoomId);
     setIsMuted(false);
     setIsDeafened(false);
-    notify(`เชื่อมต่อ Voice Huddle ในห้อง ${rooms.find(r => r.id === targetRoomId)?.name} แล้ว 🎙️`);
+    const roomObj = rooms.find(r => r.id === targetRoomId);
+    notify(`เชื่อมต่อ Voice Huddle ในห้อง ${roomObj?.name || 'ทำงาน'} แล้ว 🎙️`);
   }, [rooms]);
 
   const leaveHuddle = useCallback(() => {
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getTracks().forEach(track => track.stop());
-      audioStreamRef.current = null;
-    }
+    try {
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => {
+          try { track.stop(); } catch {}
+        });
+        audioStreamRef.current = null;
+      }
+    } catch {}
     setInHuddle(false);
     setHuddleRoomId(null);
     notify('ออกจาก Voice Huddle แล้ว 👋');
@@ -355,10 +363,11 @@ export default function App() {
   const toggleMute = useCallback(() => {
     setIsMuted(prev => {
       const next = !prev;
-      if (audioStreamRef.current) {
-        audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = !next; });
-      }
-      notify(next ? 'ปิดไมค์แล้ว (Muted) 🔇' : 'เปิดไมค์แล้ว (Unmuted) 🎙️');
+      try {
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = !next; });
+        }
+      } catch {}
       return next;
     });
   }, []);
@@ -366,17 +375,21 @@ export default function App() {
   const startHoldTalk = useCallback(() => {
     if (!inHuddle) return;
     setIsMuted(false);
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
-    }
+    try {
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
+      }
+    } catch {}
   }, [inHuddle]);
 
   const stopHoldTalk = useCallback(() => {
     if (!inHuddle) return;
     setIsMuted(true);
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
-    }
+    try {
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
+      }
+    } catch {}
   }, [inHuddle]);
 
   const toggleDeafen = useCallback(() => {
@@ -384,11 +397,12 @@ export default function App() {
       const next = !prev;
       if (next) {
         setIsMuted(true);
-        if (audioStreamRef.current) {
-          audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
-        }
+        try {
+          if (audioStreamRef.current) {
+            audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
+          }
+        } catch {}
       }
-      notify(next ? 'ปิดเสียงลำโพงแล้ว (Deafened) 🔇' : 'เปิดเสียงลำโพงแล้ว 🎧');
       return next;
     });
   }, []);
@@ -428,67 +442,6 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [inHuddle, startHoldTalk, stopHoldTalk]);
-
-  // Real-time Background WebRTC Audio Gateway for Voice Huddle
-  useEffect(() => {
-    if (!inHuddle || !huddleRoomId) {
-      if (jitsiAudioApiRef.current) {
-        try { jitsiAudioApiRef.current.dispose(); } catch {}
-        jitsiAudioApiRef.current = null;
-      }
-      if (audioBridgeContainerRef.current) {
-        audioBridgeContainerRef.current.innerHTML = '';
-      }
-      return;
-    }
-
-    const JitsiMeetAPI = (window as any).JitsiMeetExternalAPI;
-    const roomName = `PrimeHuddle2026-${huddleRoomId}`;
-
-    if (JitsiMeetAPI && audioBridgeContainerRef.current) {
-      audioBridgeContainerRef.current.innerHTML = '';
-      try {
-        const api = new JitsiMeetAPI('meet.jit.si', {
-          roomName,
-          parentNode: audioBridgeContainerRef.current,
-          configOverwrite: {
-            startWithAudioMuted: false,
-            startWithVideoMuted: true,
-            prejoinPageEnabled: false,
-            disableDeepLinking: true,
-            toolbarButtons: [],
-            disableProfile: true,
-            notifications: []
-          },
-          userInfo: {
-            displayName: me.name
-          }
-        });
-        jitsiAudioApiRef.current = api;
-      } catch (err) {
-        console.warn('Jitsi audio gateway init error:', err);
-      }
-    }
-
-    return () => {
-      if (jitsiAudioApiRef.current) {
-        try { jitsiAudioApiRef.current.dispose(); } catch {}
-        jitsiAudioApiRef.current = null;
-      }
-      if (audioBridgeContainerRef.current) {
-        audioBridgeContainerRef.current.innerHTML = '';
-      }
-    };
-  }, [inHuddle, huddleRoomId, me.name]);
-
-  // Synchronize mute state with WebRTC audio gateway
-  useEffect(() => {
-    if (jitsiAudioApiRef.current) {
-      try {
-        jitsiAudioApiRef.current.executeCommand('setAudioMute', isMuted);
-      } catch {}
-    }
-  }, [isMuted]);
 
   // Floating Pop-up Window for Google Meet (Opens on top of screen, not a new full tab)
   const launchGoogleMeetWindow = useCallback((url?: string) => {
@@ -1731,23 +1684,22 @@ export default function App() {
         </div>
       )}
 
-      {/* Background WebRTC Audio Gateway Container for Voice Huddle */}
-      <div 
-        ref={audioBridgeContainerRef} 
-        id="huddle-audio-gateway"
-        style={{ position: 'fixed', width: '1px', height: '1px', top: '-100px', left: '-100px', opacity: 0, pointerEvents: 'none' }}
-        aria-hidden="true"
-      >
-        {/* Fallback audio stream if JitsiMeetExternalAPI is delayed */}
-        {inHuddle && huddleRoomId && !jitsiAudioApiRef.current && (
+      {/* Background Audio Gateway for Voice Huddle */}
+      {inHuddle && huddleRoomId && (
+        <div 
+          id="huddle-audio-gateway"
+          style={{ position: 'fixed', width: '1px', height: '1px', top: '-100px', left: '-100px', opacity: 0, pointerEvents: 'none', overflow: 'hidden' }}
+          aria-hidden="true"
+        >
           <iframe
-            src={`https://meet.jit.si/PrimeHuddle2026-${huddleRoomId}#config.startWithVideoMuted=true&config.prejoinPageEnabled=false&config.disableDeepLinking=true&userInfo.displayName="${encodeURIComponent(me.name)}"`}
-            allow="microphone; autoplay; clipboard-write"
+            key={`huddle-audio-${huddleRoomId}`}
+            src={`https://meet.jit.si/PrimeHuddle2026-${huddleRoomId}#config.startWithVideoMuted=true&config.startWithAudioMuted=${isMuted}&config.prejoinPageEnabled=false&config.disableDeepLinking=true&userInfo.displayName="${encodeURIComponent(me.name)}"`}
+            allow="microphone; autoplay"
             style={{ width: '1px', height: '1px', border: 0 }}
             title="Voice Huddle Audio Stream"
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Toast Alert */}
       {toast && (
