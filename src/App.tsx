@@ -3,7 +3,8 @@ import type { Session } from '@supabase/supabase-js';
 import { 
   Home, Users, ClipboardList, Megaphone, Settings, ArrowUpRight, DoorOpen, Hand, 
   Coffee, Focus, Video, X, Check, LogOut, Bell, Menu, ShieldCheck, Save, Map, 
-  List, Wifi, WifiOff, CalendarCheck, Clock, CheckCircle2, AlertCircle, Plus, Trash2 
+  List, Wifi, WifiOff, CalendarCheck, Clock, CheckCircle2, AlertCircle, Plus, Trash2,
+  Mic, MicOff, Headphones, PhoneOff, Radio
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import { 
@@ -84,6 +85,14 @@ export default function App() {
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [knockTarget, setKnockTarget] = useState<Member | null>(null);
   const [activeVideoRoom, setActiveVideoRoom] = useState<Room | null>(null);
+  
+  // Voice Huddle State (Discord/Slack style voice channels)
+  const [inHuddle, setInHuddle] = useState(false);
+  const [huddleRoomId, setHuddleRoomId] = useState<RoomId | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -317,7 +326,64 @@ export default function App() {
   const incoming = knocks.filter(k => k.state === 'pending' && Date.now() - new Date(k.created_at).getTime() < 300000);
 
   useEffect(() => { setNote(me.note || ''); }, [me.note, demo]);
-  useEffect(() => setMeetingUrl(room.meet_url || ''), [room.id, room.meet_url]);
+  const joinHuddle = useCallback(async (targetRoomId: RoomId) => {
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+        audioStreamRef.current = stream;
+      }
+    } catch {}
+    setInHuddle(true);
+    setHuddleRoomId(targetRoomId);
+    setIsMuted(false);
+    setIsDeafened(false);
+    notify(`เชื่อมต่อ Voice Huddle ในห้อง ${rooms.find(r => r.id === targetRoomId)?.name} แล้ว 🎙️`);
+  }, [rooms]);
+
+  const leaveHuddle = useCallback(() => {
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop());
+      audioStreamRef.current = null;
+    }
+    setInHuddle(false);
+    setHuddleRoomId(null);
+    notify('ออกจาก Voice Huddle แล้ว 👋');
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => {
+      const next = !prev;
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = !next; });
+      }
+      notify(next ? 'ปิดไมค์แล้ว (Muted) 🔇' : 'เปิดไมค์แล้ว (Unmuted) 🎙️');
+      return next;
+    });
+  }, []);
+
+  const toggleDeafen = useCallback(() => {
+    setIsDeafened(prev => {
+      const next = !prev;
+      if (next) {
+        setIsMuted(true);
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
+        }
+      }
+      notify(next ? 'ปิดเสียงลำโพงแล้ว (Deafened) 🔇' : 'เปิดเสียงลำโพงแล้ว 🎧');
+      return next;
+    });
+  }, []);
+
+  const openGoogleMeet = useCallback((targetRoom: Room) => {
+    if (targetRoom.meet_url && validMeetUrl(targetRoom.meet_url)) {
+      window.open(targetRoom.meet_url, '_blank', 'noopener,noreferrer');
+      notify(`เปิด Google Meet ของห้อง ${targetRoom.name} แล้ว 📹`);
+    } else {
+      window.open('https://meet.google.com/new', '_blank', 'noopener,noreferrer');
+      notify(`เปิด Google Meet ด่วนสำหรับห้อง ${targetRoom.name} 📹`);
+    }
+  }, []);
 
   async function action(fn: () => Promise<void>) {
     setBusy(true);
@@ -829,16 +895,23 @@ export default function App() {
                   <button className="primary" disabled={busy || me.room === room.id} onClick={() => void updateProfile({ room_id: room.id })}>
                     {me.room === room.id ? <Check size={18} /> : <DoorOpen size={18} />} {me.room === room.id ? 'คุณอยู่ในห้องนี้' : 'เข้าห้องนี้'}
                   </button>
-                  <button className="secondary" onClick={() => setActiveVideoRoom(room)}>
-                    <Video size={18} />เปิดวิดีโอคอลในห้องนี้
-                  </button>
-                  {room.meet_url ? (
-                    <button className="text-button" style={{ marginTop: '4px', justifyContent: 'center' }} onClick={meeting}>
-                      <ArrowUpRight size={14} />หรือเปิดผ่าน Google Meet
+                  {/* Hybrid 1: Voice Huddle (Discord/Slack style) */}
+                  {inHuddle && huddleRoomId === room.id ? (
+                    <button className="secondary huddle-joined-btn" onClick={leaveHuddle}>
+                      <Radio size={17} className="pulse-icon" /><span>🟢 อยู่ใน Voice Huddle (คลิกเพื่อออก)</span>
                     </button>
                   ) : (
-                    <small className="room-hint">วิดีโอคอลลอยทับหน้าเว็บ ไม่ต้องสลับแท็บ</small>
+                    <button className="secondary huddle-btn" onClick={() => { if (me.room !== room.id) void updateProfile({ room_id: room.id }); void joinHuddle(room.id); }}>
+                      <Mic size={17} /><span>🎙️ เปิดไมค์คุย (Voice Huddle)</span>
+                    </button>
                   )}
+                  {/* Hybrid 2: Google Meet (Official / Presentation) */}
+                  <button className="secondary meet-btn" onClick={() => openGoogleMeet(room)}>
+                    <Video size={17} /><span>เปิด Google Meet ประจำห้อง</span><ArrowUpRight size={13} />
+                  </button>
+                  <small className="room-hint">
+                    {room.meet_url ? 'มีลิงก์ Google Meet ประจำห้องแล้ว' : 'คุยเสียงสดด้วย Voice Huddle หรือเปิด Google Meet ได้ทันที'}
+                  </small>
                 </aside>
               </div>
 
@@ -1430,6 +1503,54 @@ export default function App() {
               </div>
             </form>
           </section>
+        </div>
+      )}
+
+      {/* Floating Bottom Voice Huddle Dock */}
+      {inHuddle && (
+        <div className="huddle-floating-dock" role="region" aria-label="แถบควบคุม Voice Huddle">
+          <div className="huddle-dock-info">
+            <span className="huddle-dock-dot">
+              <Radio size={15} className="pulse-icon" />
+            </span>
+            <div>
+              <strong>Voice Huddle · {rooms.find(r => r.id === huddleRoomId)?.name}</strong>
+              <small>{isDeafened ? 'ปิดเสียงลำโพง' : isMuted ? 'ไมโครโฟนปิดอยู่ (Muted)' : 'กำลังเชื่อมต่อเสียง (เปิดไมค์)'}</small>
+            </div>
+          </div>
+          <div className="huddle-dock-actions">
+            <button 
+              className={`huddle-dock-btn ${isMuted ? 'muted' : 'active'}`}
+              onClick={toggleMute}
+              title={isMuted ? 'เปิดไมโครโฟน' : 'ปิดไมโครโฟน'}
+            >
+              {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
+              <span>{isMuted ? 'ไมค์ปิด' : 'เปิดไมค์'}</span>
+            </button>
+            <button 
+              className={`huddle-dock-btn ${isDeafened ? 'muted' : ''}`}
+              onClick={toggleDeafen}
+              title={isDeafened ? 'เปิดเสียงลำโพง' : 'ปิดเสียงลำโพง'}
+            >
+              <Headphones size={16} />
+            </button>
+            <button 
+              className="huddle-dock-btn meet-link"
+              onClick={() => openGoogleMeet(rooms.find(r => r.id === huddleRoomId) || room)}
+              title="เปิด Google Meet ของห้องนี้"
+            >
+              <Video size={16} />
+              <span>Google Meet</span>
+            </button>
+            <button 
+              className="huddle-dock-btn hangup"
+              onClick={leaveHuddle}
+              title="ออกจาก Voice Huddle"
+            >
+              <PhoneOff size={16} />
+              <span>วางสาย</span>
+            </button>
+          </div>
         </div>
       )}
 

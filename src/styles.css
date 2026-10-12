@@ -120,3 +120,35 @@
   .team-att-row{grid-template-columns:1fr;gap:8px}
   .team-att-status{padding-left:44px}
 }
+
+/* Voice Huddle & Google Meet Styles */
+.huddle-btn{background:#edf8f4!important;color:#1e6a4b!important;border-color:#bce5d3!important;font-weight:600}
+.huddle-btn:hover{background:#dcf2e9!important}
+.huddle-joined-btn{background:#23694c!important;color:#fff!important;border-color:#23694c!important;font-weight:600}
+.huddle-joined-btn:hover{background:#1c553d!important}
+.meet-btn{background:#edf5fb!important;color:#1c5275!important;border-color:#c8dfec!important;font-weight:600}
+.meet-btn:hover{background:#dfedf6!important}
+
+.pulse-icon{animation:huddlePulse 1.8s infinite ease-in-out;color:#39b982}
+@keyframes huddlePulse{0%{transform:scale(0.92);opacity:0.8}50%{transform:scale(1.15);opacity:1}100%{transform:scale(0.92);opacity:0.8}}
+
+.huddle-floating-dock{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#102535ee;backdrop-filter:blur(14px);color:#fff;border:1px solid #ffffff24;border-radius:24px;padding:10px 18px;display:flex;align-items:center;gap:20px;box-shadow:0 12px 40px #091a2766;z-index:180;max-width:94vw;width:max-content}
+.huddle-dock-info{display:flex;align-items:center;gap:12px}
+.huddle-dock-dot{width:32px;height:32px;background:#1e445b;border-radius:50%;display:grid;place-items:center;flex-shrink:0}
+.huddle-dock-info strong{display:block;font-size:12px;color:#f0f6fa}
+.huddle-dock-info small{display:block;font-size:10px;color:#8ba5b5}
+.huddle-dock-actions{display:flex;align-items:center;gap:8px}
+.huddle-dock-btn{background:#ffffff17;color:#fff;border:0;border-radius:12px;padding:7px 12px;font-size:11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;transition:all .15s}
+.huddle-dock-btn:hover{background:#ffffff2b}
+.huddle-dock-btn.active{background:#256c4e;color:#fff}
+.huddle-dock-btn.muted{background:#a34237;color:#fff}
+.huddle-dock-btn.meet-link{background:#1f4e70;color:#e8f4fc}
+.huddle-dock-btn.meet-link:hover{background:#27628c}
+.huddle-dock-btn.hangup{background:#c03c30;color:#fff}
+.huddle-dock-btn.hangup:hover{background:#dc4437}
+
+@media(max-width:700px){
+  .huddle-floating-dock{flex-direction:column;gap:10px;padding:12px 14px;border-radius:18px;bottom:16px;width:92vw}
+  .huddle-dock-actions{width:100%;justify-content:center}
+}
+
