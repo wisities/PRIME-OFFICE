@@ -152,3 +152,32 @@
   .huddle-dock-actions{width:100%;justify-content:center}
 }
 
+/* Push-to-Talk & Lock Notice Styles */
+.huddle-locked-notice{display:flex;align-items:center;gap:8px;background:#f5f7f9;border:1px dashed #d5e0e7;padding:10px 14px;border-radius:10px;color:#7e93a0;font-size:11px;margin-top:6px}
+.huddle-locked-notice strong{color:#446175}
+
+.talk-console{background:#f6faf8;border:1.5px solid #cce7dc;border-radius:14px;padding:12px;display:grid;gap:10px;margin-top:8px}
+.talk-btn-large{width:100%;border-radius:12px;background:#1e6a4b;color:#fff;border:0;padding:14px;display:flex;align-items:center;justify-content:center;gap:12px;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;transition:all .15s;box-shadow:0 3px 12px #1e6a4b33}
+.talk-btn-large:hover{background:#18583e}
+.talk-btn-large.speaking{background:#158659;box-shadow:0 0 0 4px #42c89255, 0 4px 16px #1586594d;transform:scale(0.99)}
+.talk-btn-text{text-align:left}
+.talk-btn-text strong{display:block;font-size:13px}
+.talk-btn-text small{display:block;font-size:10px;color:#d2efe3;margin-top:2px}
+
+.talk-quick-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.talk-sub-btn{background:#fff;border:1px solid #d8e5ec;color:#4f6b7c;border-radius:8px;padding:7px 8px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:all .15s}
+.talk-sub-btn:hover{background:#f0f5f8}
+.talk-sub-btn.active{background:#e7f7ef;color:#1e6a4b;border-color:#b8e5d0}
+.talk-sub-btn.muted{background:#fdf2f0;color:#b14032;border-color:#f5cac5}
+.talk-sub-btn.hangup{color:#a93b2e}
+.talk-sub-btn.hangup:hover{background:#fbeae8}
+
+.btn-popup-launch{background:#23648c!important;color:#fff!important;border:0;border-radius:8px;padding:7px 12px;font-size:11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.btn-popup-launch:hover{background:#1c5375!important}
+.meet-url-bar{background:#182e3e;padding:9px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:#a5bdce;border-bottom:1px solid #ffffff12}
+.meet-url-bar strong{color:#e6f3fc}
+.meet-url-bar button{background:#265e82;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:11px;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.meet-url-bar button:hover{background:#30719c}
+
+.huddle-dock-btn.speaking{background:#158659!important;box-shadow:0 0 0 3px #44ca9466}
+

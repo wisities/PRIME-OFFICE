@@ -361,6 +361,22 @@ export default function App() {
     });
   }, []);
 
+  const startHoldTalk = useCallback(() => {
+    if (!inHuddle) return;
+    setIsMuted(false);
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
+    }
+  }, [inHuddle]);
+
+  const stopHoldTalk = useCallback(() => {
+    if (!inHuddle) return;
+    setIsMuted(true);
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
+    }
+  }, [inHuddle]);
+
   const toggleDeafen = useCallback(() => {
     setIsDeafened(prev => {
       const next = !prev;
@@ -375,14 +391,60 @@ export default function App() {
     });
   }, []);
 
-  const openGoogleMeet = useCallback((targetRoom: Room) => {
-    if (targetRoom.meet_url && validMeetUrl(targetRoom.meet_url)) {
-      window.open(targetRoom.meet_url, '_blank', 'noopener,noreferrer');
-      notify(`เปิด Google Meet ของห้อง ${targetRoom.name} แล้ว 📹`);
-    } else {
-      window.open('https://meet.google.com/new', '_blank', 'noopener,noreferrer');
-      notify(`เปิด Google Meet ด่วนสำหรับห้อง ${targetRoom.name} 📹`);
+  // When moving between rooms, if you leave the huddle room, leave huddle automatically
+  useEffect(() => {
+    if (inHuddle && huddleRoomId && me.room !== huddleRoomId) {
+      leaveHuddle();
     }
+  }, [me.room, inHuddle, huddleRoomId, leaveHuddle]);
+
+  // Spacebar Push-to-Talk (Hold Spacebar to speak)
+  useEffect(() => {
+    if (!inHuddle) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+        if (!e.repeat) {
+          e.preventDefault();
+          startHoldTalk();
+        }
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+        e.preventDefault();
+        stopHoldTalk();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [inHuddle, startHoldTalk, stopHoldTalk]);
+
+  // Floating Pop-up Window for Google Meet (Opens on top of screen, not a new full tab)
+  const launchGoogleMeetWindow = useCallback((url?: string) => {
+    const meetUrl = url && validMeetUrl(url) ? url : 'https://meet.google.com/new';
+    const popupWidth = 1080;
+    const popupHeight = 720;
+    const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
+    const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
+    window.open(
+      meetUrl,
+      'GoogleMeetPopup',
+      `width=${popupWidth},height=${popupHeight},top=${top},left=${left},popup=yes,menubar=no,toolbar=no,location=no,status=no`
+    );
+    notify('เปิด Google Meet หน้าต่าง Pop-up ลอยแล้ว 📹');
+  }, []);
+
+  const openGoogleMeet = useCallback((targetRoom: Room) => {
+    // Open in-app popup modal overlay directly over webpage
+    setActiveVideoRoom(targetRoom);
   }, []);
 
   async function action(fn: () => Promise<void>) {
@@ -895,22 +957,57 @@ export default function App() {
                   <button className="primary" disabled={busy || me.room === room.id} onClick={() => void updateProfile({ room_id: room.id })}>
                     {me.room === room.id ? <Check size={18} /> : <DoorOpen size={18} />} {me.room === room.id ? 'คุณอยู่ในห้องนี้' : 'เข้าห้องนี้'}
                   </button>
-                  {/* Hybrid 1: Voice Huddle (Discord/Slack style) */}
-                  {inHuddle && huddleRoomId === room.id ? (
-                    <button className="secondary huddle-joined-btn" onClick={leaveHuddle}>
-                      <Radio size={17} className="pulse-icon" /><span>🟢 อยู่ใน Voice Huddle (คลิกเพื่อออก)</span>
-                    </button>
+
+                  {/* Rule 1: Must enter room first before Voice Huddle */}
+                  {me.room !== room.id ? (
+                    <div className="huddle-locked-notice">
+                      <MicOff size={15} />
+                      <span>กด <strong>เข้าห้องนี้</strong> ก่อน ถึงจะเปิดไมค์คุยกับเพื่อนได้</span>
+                    </div>
                   ) : (
-                    <button className="secondary huddle-btn" onClick={() => { if (me.room !== room.id) void updateProfile({ room_id: room.id }); void joinHuddle(room.id); }}>
-                      <Mic size={17} /><span>🎙️ เปิดไมค์คุย (Voice Huddle)</span>
-                    </button>
+                    /* Rule 2: Push-to-talk or click-to-talk once inside the room */
+                    inHuddle && huddleRoomId === room.id ? (
+                      <div className="talk-console">
+                        <button 
+                          type="button"
+                          className={`talk-btn-large ${!isMuted ? 'speaking' : ''}`}
+                          onPointerDown={startHoldTalk}
+                          onPointerUp={stopHoldTalk}
+                          onPointerLeave={stopHoldTalk}
+                          onClick={toggleMute}
+                          title="คลิกเพื่อเปิด/ปิดไมค์ หรือกดค้างเพื่อพูด (Spacebar)"
+                        >
+                          {!isMuted ? <Mic size={24} className="pulse-icon" /> : <MicOff size={24} />}
+                          <div className="talk-btn-text">
+                            <strong>{!isMuted ? 'กำลังเปิดไมค์พูด…' : 'กดเพื่อเปิดไมค์ (หรือกดค้าง)'}</strong>
+                            <small>{!isMuted ? 'คลิกอีกครั้งเพื่อปิดไมค์' : 'กด 1 ครั้งพูด / กดค้าง / Spacebar'}</small>
+                          </div>
+                        </button>
+                        <div className="talk-quick-row">
+                          <button type="button" className={`talk-sub-btn ${isMuted ? 'muted' : 'active'}`} onClick={toggleMute}>
+                            {isMuted ? <MicOff size={14}/> : <Mic size={14}/>} {isMuted ? 'ไมค์ปิดอยู่' : 'ไมค์เปิด'}
+                          </button>
+                          <button type="button" className={`talk-sub-btn ${isDeafened ? 'muted' : ''}`} onClick={toggleDeafen}>
+                            <Headphones size={14}/> {isDeafened ? 'หูฟังปิด' : 'หูฟังเปิด'}
+                          </button>
+                          <button type="button" className="talk-sub-btn hangup" onClick={leaveHuddle}>
+                            <PhoneOff size={14}/> ออกจาก Huddle
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button className="primary huddle-join-btn" onClick={() => joinHuddle(room.id)}>
+                        <Mic size={17} /><span>🎙️ เปิดไมค์ Voice Huddle (ในห้องนี้)</span>
+                      </button>
+                    )
                   )}
-                  {/* Hybrid 2: Google Meet (Official / Presentation) */}
+
+                  {/* Rule 3: Google Meet popup overlay (no new full tab) */}
                   <button className="secondary meet-btn" onClick={() => openGoogleMeet(room)}>
-                    <Video size={17} /><span>เปิด Google Meet ประจำห้อง</span><ArrowUpRight size={13} />
+                    <Video size={17} /><span>เปิด Google Meet (Popup ทับหน้าเว็บ)</span><ArrowUpRight size={13} />
                   </button>
                   <small className="room-hint">
-                    {room.meet_url ? 'มีลิงก์ Google Meet ประจำห้องแล้ว' : 'คุยเสียงสดด้วย Voice Huddle หรือเปิด Google Meet ได้ทันที'}
+                    {room.meet_url ? 'มีลิงก์ Google Meet ประจำห้องแล้ว' : 'เปิด Google Meet แบบ Pop-up ทับหน้าเว็บ ไม่เปิดแท็บใหม่'}
                   </small>
                 </aside>
               </div>
@@ -1439,17 +1536,30 @@ export default function App() {
         <div className="video-backdrop" onClick={() => setActiveVideoRoom(null)}>
           <section className="video-window" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') setActiveVideoRoom(null); }}>
             <header className="video-window-header">
-              <strong><Video size={19} />{activeVideoRoom.name} <span className="tiny-tag">วิดีโอคอลในตัว</span></strong>
+              <strong><Video size={19} />{activeVideoRoom.name} <span className="tiny-tag">Google Meet / Popup Window</span></strong>
               <div className="video-window-controls">
-                <a href={`https://meet.jit.si/PrimeOffice-2026-${activeVideoRoom.id}#userInfo.displayName="${encodeURIComponent(me.name)}"`} target="_blank" rel="noopener noreferrer">
-                  <ArrowUpRight size={14} />แยกหน้าต่าง
-                </a>
+                <button
+                  type="button"
+                  className="btn-popup-launch"
+                  onClick={() => launchGoogleMeetWindow(activeVideoRoom.meet_url)}
+                  title="เปิดเป็นหน้าต่าง Google Meet ลอยทับหน้าจอ ไม่เปิดแท็บใหม่"
+                >
+                  <ArrowUpRight size={14} />เปิดหน้าต่าง Meet Pop-up
+                </button>
                 <button className="btn-close" onClick={() => setActiveVideoRoom(null)}>
                   <X size={15} />ปิดห้องประชุม
                 </button>
               </div>
             </header>
             <div className="video-body">
+              {activeVideoRoom.meet_url ? (
+                <div className="meet-url-bar">
+                  <span>🔗 ลิงก์ห้อง: <strong>{activeVideoRoom.meet_url}</strong></span>
+                  <button type="button" onClick={() => launchGoogleMeetWindow(activeVideoRoom.meet_url)}>
+                    <ArrowUpRight size={12} />เปิดหน้าต่าง Meet ลอยทับ
+                  </button>
+                </div>
+              ) : null}
               <iframe
                 src={`https://meet.jit.si/PrimeOffice-2026-${activeVideoRoom.id}#userInfo.displayName="${encodeURIComponent(me.name)}"`}
                 allow="camera; microphone; display-capture; autoplay; clipboard-write"
@@ -1520,12 +1630,16 @@ export default function App() {
           </div>
           <div className="huddle-dock-actions">
             <button 
-              className={`huddle-dock-btn ${isMuted ? 'muted' : 'active'}`}
+              type="button"
+              className={`huddle-dock-btn ${!isMuted ? 'active speaking' : 'muted'}`}
+              onPointerDown={startHoldTalk}
+              onPointerUp={stopHoldTalk}
+              onPointerLeave={stopHoldTalk}
               onClick={toggleMute}
-              title={isMuted ? 'เปิดไมโครโฟน' : 'ปิดไมโครโฟน'}
+              title="คลิกเพื่อเปิด/ปิดไมค์ หรือกดค้างเพื่อพูด (Spacebar)"
             >
-              {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
-              <span>{isMuted ? 'ไมค์ปิด' : 'เปิดไมค์'}</span>
+              {!isMuted ? <Mic size={16} className="pulse-icon" /> : <MicOff size={16} />}
+              <span>{!isMuted ? 'กำลังพูด…' : 'กดพูด (หรือกดค้าง)'}</span>
             </button>
             <button 
               className={`huddle-dock-btn ${isDeafened ? 'muted' : ''}`}
