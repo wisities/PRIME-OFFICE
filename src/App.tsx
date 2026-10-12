@@ -84,7 +84,6 @@ export default function App() {
   const [knocks, setKnocks] = useState<Knock[]>([]);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [knockTarget, setKnockTarget] = useState<Member | null>(null);
-  const [activeVideoRoom, setActiveVideoRoom] = useState<Room | null>(null);
   
   // Voice Huddle State (Discord/Slack style voice channels)
   const [inHuddle, setInHuddle] = useState(false);
@@ -459,9 +458,9 @@ export default function App() {
   }, []);
 
   const openGoogleMeet = useCallback((targetRoom: Room) => {
-    // Open in-app popup modal overlay directly over webpage
-    setActiveVideoRoom(targetRoom);
-  }, []);
+    // Launch Google Meet as a floating pop-up window directly over the webpage
+    launchGoogleMeetWindow(targetRoom.meet_url);
+  }, [launchGoogleMeetWindow]);
 
   async function action(fn: () => Promise<void>) {
     setBusy(true);
@@ -1547,45 +1546,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: Video Meeting Pop-up */}
-      {activeVideoRoom && (
-        <div className="video-backdrop" onClick={() => setActiveVideoRoom(null)}>
-          <section className="video-window" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') setActiveVideoRoom(null); }}>
-            <header className="video-window-header">
-              <strong><Video size={19} />{activeVideoRoom.name} <span className="tiny-tag">Google Meet / Popup Window</span></strong>
-              <div className="video-window-controls">
-                <button
-                  type="button"
-                  className="btn-popup-launch"
-                  onClick={() => launchGoogleMeetWindow(activeVideoRoom.meet_url)}
-                  title="เปิดเป็นหน้าต่าง Google Meet ลอยทับหน้าจอ ไม่เปิดแท็บใหม่"
-                >
-                  <ArrowUpRight size={14} />เปิดหน้าต่าง Meet Pop-up
-                </button>
-                <button className="btn-close" onClick={() => setActiveVideoRoom(null)}>
-                  <X size={15} />ปิดห้องประชุม
-                </button>
-              </div>
-            </header>
-            <div className="video-body">
-              {activeVideoRoom.meet_url ? (
-                <div className="meet-url-bar">
-                  <span>🔗 ลิงก์ห้อง: <strong>{activeVideoRoom.meet_url}</strong></span>
-                  <button type="button" onClick={() => launchGoogleMeetWindow(activeVideoRoom.meet_url)}>
-                    <ArrowUpRight size={12} />เปิดหน้าต่าง Meet ลอยทับ
-                  </button>
-                </div>
-              ) : null}
-              <iframe
-                src={`https://meet.jit.si/PrimeOffice-2026-${activeVideoRoom.id}#userInfo.displayName="${encodeURIComponent(me.name)}"`}
-                allow="camera; microphone; display-capture; autoplay; clipboard-write"
-                className="video-iframe"
-                title={`วิดีโอคอล ${activeVideoRoom.name}`}
-              />
-            </div>
-          </section>
-        </div>
-      )}
 
       {/* MODAL: Edit Profile */}
       {profileOpen && (
@@ -1684,22 +1644,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Background Audio Gateway for Voice Huddle */}
-      {inHuddle && huddleRoomId && (
-        <div 
-          id="huddle-audio-gateway"
-          style={{ position: 'fixed', width: '1px', height: '1px', top: '-100px', left: '-100px', opacity: 0, pointerEvents: 'none', overflow: 'hidden' }}
-          aria-hidden="true"
-        >
-          <iframe
-            key={`huddle-audio-${huddleRoomId}`}
-            src={`https://meet.jit.si/PrimeHuddle2026-${huddleRoomId}#config.startWithVideoMuted=true&config.startWithAudioMuted=${isMuted}&config.prejoinPageEnabled=false&config.disableDeepLinking=true&userInfo.displayName="${encodeURIComponent(me.name)}"`}
-            allow="microphone; autoplay"
-            style={{ width: '1px', height: '1px', border: 0 }}
-            title="Voice Huddle Audio Stream"
-          />
-        </div>
-      )}
 
       {/* Toast Alert */}
       {toast && (
