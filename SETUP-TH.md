@@ -58,14 +58,14 @@ URL หน้าจัดการ `supabase.com/dashboard/project/...` ไม�
 
 ## 4. ตั้งค่าลิงก์กลับเข้าเว็บใน Supabase
 
-URL เว็บไซต์จริงที่เผยแพร่แล้ว:
-`https://prime-virtual-office.city-of-trust-realtime-presence.workers.dev`
+URL เว็บไซต์จริง (Cloudflare Pages):
+`https://prime-virtual-office.pages.dev`
 
 1. เข้า Supabase > Authentication > URL Configuration
 2. Site URL:
-   `https://prime-virtual-office.city-of-trust-realtime-presence.workers.dev`
+   `https://prime-virtual-office.pages.dev`
 3. Redirect URLs เพิ่ม:
-   `https://prime-virtual-office.city-of-trust-realtime-presence.workers.dev/`
+   `https://prime-virtual-office.pages.dev/`
    และเพิ่ม `http://127.0.0.1:5174/` (สำหรับการทดสอบในเครื่อง)
 4. กด Save changes
 
@@ -83,7 +83,7 @@ URL เว็บไซต์จริงที่เผยแพร่แล้�
 6. Data Access ใช้เฉพาะ `openid`, `userinfo.email`, `userinfo.profile` ไม่ต้องขอ Drive/Gmail/Calendar
 7. Clients > Create client > Web application
 8. Authorized JavaScript origins: เพิ่ม URL เว็บจริง:
-   `https://prime-virtual-office.city-of-trust-realtime-presence.workers.dev`
+   `https://prime-virtual-office.pages.dev`
    (และ `http://127.0.0.1:5174` สำหรับเครื่องตัวเอง)
 9. Authorized redirect URIs: ใส่ค่าต่อไปนี้ตรงตัว:
 
