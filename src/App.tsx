@@ -92,6 +92,8 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const audioStreamRef = useRef<MediaStream | null>(null);
+  const jitsiAudioApiRef = useRef<any>(null);
+  const audioBridgeContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
@@ -426,6 +428,67 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [inHuddle, startHoldTalk, stopHoldTalk]);
+
+  // Real-time Background WebRTC Audio Gateway for Voice Huddle
+  useEffect(() => {
+    if (!inHuddle || !huddleRoomId) {
+      if (jitsiAudioApiRef.current) {
+        try { jitsiAudioApiRef.current.dispose(); } catch {}
+        jitsiAudioApiRef.current = null;
+      }
+      if (audioBridgeContainerRef.current) {
+        audioBridgeContainerRef.current.innerHTML = '';
+      }
+      return;
+    }
+
+    const JitsiMeetAPI = (window as any).JitsiMeetExternalAPI;
+    const roomName = `PrimeHuddle2026-${huddleRoomId}`;
+
+    if (JitsiMeetAPI && audioBridgeContainerRef.current) {
+      audioBridgeContainerRef.current.innerHTML = '';
+      try {
+        const api = new JitsiMeetAPI('meet.jit.si', {
+          roomName,
+          parentNode: audioBridgeContainerRef.current,
+          configOverwrite: {
+            startWithAudioMuted: false,
+            startWithVideoMuted: true,
+            prejoinPageEnabled: false,
+            disableDeepLinking: true,
+            toolbarButtons: [],
+            disableProfile: true,
+            notifications: []
+          },
+          userInfo: {
+            displayName: me.name
+          }
+        });
+        jitsiAudioApiRef.current = api;
+      } catch (err) {
+        console.warn('Jitsi audio gateway init error:', err);
+      }
+    }
+
+    return () => {
+      if (jitsiAudioApiRef.current) {
+        try { jitsiAudioApiRef.current.dispose(); } catch {}
+        jitsiAudioApiRef.current = null;
+      }
+      if (audioBridgeContainerRef.current) {
+        audioBridgeContainerRef.current.innerHTML = '';
+      }
+    };
+  }, [inHuddle, huddleRoomId, me.name]);
+
+  // Synchronize mute state with WebRTC audio gateway
+  useEffect(() => {
+    if (jitsiAudioApiRef.current) {
+      try {
+        jitsiAudioApiRef.current.executeCommand('setAudioMute', isMuted);
+      } catch {}
+    }
+  }, [isMuted]);
 
   // Floating Pop-up Window for Google Meet (Opens on top of screen, not a new full tab)
   const launchGoogleMeetWindow = useCallback((url?: string) => {
@@ -1667,6 +1730,24 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Background WebRTC Audio Gateway Container for Voice Huddle */}
+      <div 
+        ref={audioBridgeContainerRef} 
+        id="huddle-audio-gateway"
+        style={{ position: 'fixed', width: '1px', height: '1px', top: '-100px', left: '-100px', opacity: 0, pointerEvents: 'none' }}
+        aria-hidden="true"
+      >
+        {/* Fallback audio stream if JitsiMeetExternalAPI is delayed */}
+        {inHuddle && huddleRoomId && !jitsiAudioApiRef.current && (
+          <iframe
+            src={`https://meet.jit.si/PrimeHuddle2026-${huddleRoomId}#config.startWithVideoMuted=true&config.prejoinPageEnabled=false&config.disableDeepLinking=true&userInfo.displayName="${encodeURIComponent(me.name)}"`}
+            allow="microphone; autoplay; clipboard-write"
+            style={{ width: '1px', height: '1px', border: 0 }}
+            title="Voice Huddle Audio Stream"
+          />
+        )}
+      </div>
 
       {/* Toast Alert */}
       {toast && (
