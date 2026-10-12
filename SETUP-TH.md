@@ -58,13 +58,16 @@ URL หน้าจัดการ `supabase.com/dashboard/project/...` ไม�
 
 ## 4. ตั้งค่าลิงก์กลับเข้าเว็บใน Supabase
 
-หลังได้ URL จริงจาก Cloudflare:
+URL เว็บไซต์จริงที่เผยแพร่แล้ว:
+`https://prime-virtual-office.city-of-trust-realtime-presence.workers.dev`
 
-1. Supabase > Authentication > URL Configuration
-2. Site URL = URL เว็บไซต์จริง เช่น `https://prime-teamwork.pages.dev`
-3. Redirect URLs เพิ่ม URL จริงพร้อม `/` เช่น `https://prime-teamwork.pages.dev/`
-4. ถ้าทดสอบในเครื่อง เพิ่ม `http://127.0.0.1:5174/` (หรือพอร์ตที่ terminal แสดง)
-5. Save changes
+1. เข้า Supabase > Authentication > URL Configuration
+2. Site URL:
+   `https://prime-virtual-office.city-of-trust-realtime-presence.workers.dev`
+3. Redirect URLs เพิ่ม:
+   `https://prime-virtual-office.city-of-trust-realtime-presence.workers.dev/`
+   และเพิ่ม `http://127.0.0.1:5174/` (สำหรับการทดสอบในเครื่อง)
+4. กด Save changes
 
 อย่าใส่ wildcard ของทั้ง `pages.dev` เพราะจะเปิดให้ redirect ไปเว็บอื่น
 
@@ -79,7 +82,9 @@ URL หน้าจัดการ `supabase.com/dashboard/project/...` ไม�
 5. ถ้าใช้ External สถานะ Testing ให้เพิ่มอีเมลผู้ดูแลและสมาชิกเป็น Test users จนครบรายชื่อที่จะทดลอง
 6. Data Access ใช้เฉพาะ `openid`, `userinfo.email`, `userinfo.profile` ไม่ต้องขอ Drive/Gmail/Calendar
 7. Clients > Create client > Web application
-8. Authorized JavaScript origins: เพิ่ม URL เว็บ Cloudflare จริง เช่น `https://prime-teamwork.pages.dev` (ไม่มี path)
+8. Authorized JavaScript origins: เพิ่ม URL เว็บจริง:
+   `https://prime-virtual-office.city-of-trust-realtime-presence.workers.dev`
+   (และ `http://127.0.0.1:5174` สำหรับเครื่องตัวเอง)
 9. Authorized redirect URIs: ใส่ค่าต่อไปนี้ตรงตัว:
 
    `https://hytecxupvfhqaddtymcx.supabase.co/auth/v1/callback`
