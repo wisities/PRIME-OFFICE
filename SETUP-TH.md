@@ -127,7 +127,7 @@ npm test
 npm run build
 ```
 
-เมื่อเผยแพร่ครั้งถัดไป ให้อัปโหลด dist ที่ build ใหม่ในโครงการ Cloudflare เดิม
+เมื่อเผยแพร่ครั้งถัดไป ระบบเชื่อมต่อ Git กับ Cloudflare Pages อัตโนมัติแล้ว เพียงสั่ง git push โค้ดจะ build และ deploy ให้ทันที
 
 ## แหล่งข้อมูลทางการ
 
