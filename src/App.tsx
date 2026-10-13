@@ -364,6 +364,24 @@ export default function App() {
       throw Error('not_allowed');
     }
 
+    const myRow = rows.find(r => r.user_id === session.user.id);
+    if (myRow) {
+      if (myRow.name) {
+        setCustomName(myRow.name);
+        try {
+          localStorage.setItem('prime-user-name', myRow.name);
+          localStorage.setItem('prime-demo-name', myRow.name);
+        } catch {}
+      }
+      if (myRow.avatar_url) {
+        setCustomAvatar(myRow.avatar_url);
+        try {
+          localStorage.setItem('prime-user-avatar', myRow.avatar_url);
+          localStorage.setItem('prime-demo-avatar', myRow.avatar_url);
+        } catch {}
+      }
+    }
+
     const myGoogleAvatar = session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture;
     const leavesData: LeaveRequest[] = results[6].data || [];
     const attData: AttendanceRecord[] = results[5].data || [];
@@ -809,26 +827,21 @@ export default function App() {
             data: { 
               full_name: trimmed, 
               display_name: trimmed, 
-              avatar_url: editAvatar,
-              custom_avatar: editAvatar 
+              avatar_url: editAvatar.startsWith('data:') ? undefined : editAvatar,
+              custom_avatar: editAvatar.startsWith('data:') ? undefined : editAvatar 
             } 
           });
         } catch (err) {
           console.warn('Supabase updateUser err:', err);
         }
 
-        try {
-          await supabase.from('members').update({ name: trimmed, avatar_url: editAvatar }).eq('user_id', session.user.id);
-        } catch {}
+        const { error: rpcError } = await supabase.rpc('update_my_identity', { p_name: trimmed, p_avatar: editAvatar });
+        if (rpcError) {
+          console.error('RPC update_my_identity err:', rpcError);
+          throw rpcError;
+        }
 
-        try {
-          const { error } = await supabase.rpc('update_my_identity', { p_name: trimmed, p_avatar: editAvatar });
-          if (error) console.warn('RPC update_my_identity err:', error);
-        } catch {}
-
-        try {
-          await refresh();
-        } catch {}
+        await refresh();
       }
 
       setProfileOpen(false);
@@ -854,11 +867,12 @@ export default function App() {
         canvas.height = size;
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          ctx.clearRect(0, 0, size, size);
           const minDim = Math.min(img.width, img.height);
           const sx = (img.width - minDim) / 2;
           const sy = (img.height - minDim) / 2;
           ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const dataUrl = canvas.toDataURL('image/png');
           setEditAvatar(dataUrl);
           notify('อัปโหลดและปรับขนาดรูปภาพเรียบร้อย');
         }

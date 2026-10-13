@@ -106,10 +106,18 @@ begin
 end;
 $$;
 create function public.update_my_identity(p_name text,p_avatar text default '') returns void language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := auth.uid();
+  v_email text;
 begin
-  if not public.is_active_member() then raise exception 'not_allowed'; end if;
+  if v_uid is null then raise exception 'not_allowed'; end if;
   if char_length(trim(p_name)) not between 1 and 80 then raise exception 'invalid_name'; end if;
-  update public.members set name=trim(p_name),avatar_url=trim(p_avatar) where user_id=auth.uid() and active;
+  select lower(email) into v_email from auth.users where id = v_uid;
+  update public.members
+  set name = trim(p_name),
+      avatar_url = coalesce(p_avatar, ''),
+      user_id = v_uid
+  where (user_id = v_uid or (v_email is not null and email = v_email)) and active;
   if not found then raise exception 'not_allowed'; end if;
 end;
 $$;
