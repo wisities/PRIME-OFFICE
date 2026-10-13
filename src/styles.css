@@ -703,8 +703,8 @@
   filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
 }
 
-.immersive-map-room.hub { left: 20%; top: 13%; }
-.immersive-map-room.project { right: 14%; top: 10%; }
+.immersive-map-room.hub { left: 20%; top: 16%; }
+.immersive-map-room.project { right: 15%; top: 20%; }
 .immersive-map-room.focus { left: 15%; top: 68%; }
 .immersive-map-room.coffee { right: 14%; top: 69%; }
 
@@ -1988,5 +1988,446 @@
 .mini-ctrl-btn.active {
   background: #f59e0b;
   color: white;
+}
+
+/* =========================================================================
+   AVATAR PHOTO UPLOAD STYLES
+   ========================================================================= */
+
+.upload-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.upload-avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px dashed #cbd5e1;
+  color: #334155;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.upload-avatar-btn:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.upload-avatar-btn input[type="file"] {
+  display: none;
+}
+
+/* =========================================================================
+   UNIFIED FEED: TODAY WORK & ANNOUNCEMENTS
+   ========================================================================= */
+
+.feed-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.feed-filter-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.feed-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.feed-tab-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.feed-tab-btn.active {
+  background: #173f61;
+  color: white;
+  border-color: #173f61;
+  box-shadow: 0 2px 8px rgba(23, 63, 97, 0.25);
+}
+
+.feed-composer-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.feed-composer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.feed-type-selector {
+  display: flex;
+  gap: 6px;
+}
+
+.type-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 16px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.type-pill-btn.active.today {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.type-pill-btn.active.announcement {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.feed-post-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: box-shadow 0.2s ease;
+}
+
+.feed-post-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07);
+}
+
+.feed-post-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.feed-author-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.feed-author-text strong {
+  display: block;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.feed-author-text small {
+  display: block;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.feed-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.feed-tag-badge.today {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.feed-tag-badge.announcement {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.feed-post-content h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 6px 0;
+}
+
+.feed-post-content p {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.feed-reaction-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.reaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.reaction-btn:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.reaction-btn.active {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.reaction-btn.like.active {
+  background: #ffe4e6;
+  color: #e11d48;
+  border-color: #fecdd3;
+}
+
+.reaction-btn.clap.active {
+  background: #fef3c7;
+  color: #d97706;
+  border-color: #fde68a;
+}
+
+.reaction-btn.noted.active {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.feed-comment-section {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #f1f5f9;
+}
+
+.feed-comment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.feed-comment-bubble {
+  background: white;
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  border-radius: 12px;
+  flex: 1;
+}
+
+.feed-comment-bubble strong {
+  display: block;
+  font-size: 11px;
+  color: #334155;
+  margin-bottom: 2px;
+}
+
+.feed-comment-bubble p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.feed-comment-bubble small {
+  display: block;
+  font-size: 9px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.feed-comment-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.feed-comment-input-row input {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 11px;
+  background: white;
+}
+
+.feed-comment-input-row button {
+  background: #173f61;
+  color: white;
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* =========================================================================
+   MOBILE RESPONSIVENESS OVERRIDES (< 768px & < 480px)
+   ========================================================================= */
+
+@media (max-width: 768px) {
+  .floating-top-island {
+    top: 6px;
+    max-width: calc(100vw - 12px);
+    padding: 4px 8px;
+    gap: 6px;
+  }
+  
+  .island-holiday-tag {
+    max-width: 90px;
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+
+  .my-name-tag {
+    display: none;
+  }
+
+  .topbar-checkin-pill {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .floating-bottom-dock {
+    bottom: 8px;
+    max-width: calc(100vw - 10px);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    padding: 5px 8px;
+    gap: 3px;
+  }
+
+  .floating-bottom-dock::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dock-btn {
+    min-width: 44px;
+    height: 44px;
+    padding: 2px 4px;
+    flex-shrink: 0;
+  }
+
+  .dock-btn-label {
+    font-size: 8px;
+  }
+
+  .slide-over-drawer {
+    width: 100vw;
+    border-radius: 0;
+  }
+
+  .drawer-header {
+    height: 54px;
+    padding: 0 16px;
+  }
+
+  .drawer-body {
+    padding: 16px;
+  }
+
+  .conference-stage-card {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+    max-width: 100vw;
+    max-height: 100vh;
+  }
+
+  .conference-header {
+    height: 50px;
+    padding: 0 14px;
+  }
+
+  .conference-footer-controls {
+    height: 64px;
+    padding: 0 12px;
+  }
+
+  .control-pill-btn {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+
+  .control-pill-btn span {
+    display: none; /* Icon-only on mobile */
+  }
+
+  .conference-mini-player {
+    width: 260px;
+    height: 170px;
+    bottom: 68px;
+    right: 12px;
+  }
+
+  .login-panel {
+    padding: 28px 20px;
+    border-radius: 20px;
+  }
+
+  .login-panel h1 {
+    font-size: 26px;
+  }
 }
 

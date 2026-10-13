@@ -5,7 +5,7 @@ import {
   Coffee, Focus, Video, X, Check, LogOut, Bell, Menu, ShieldCheck, Save, Map, 
   List, Wifi, WifiOff, CalendarCheck, Clock, CheckCircle2, AlertCircle, Plus, Trash2,
   Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles,
-  Maximize2, Minimize2
+  Maximize2, Minimize2, Camera, Heart, ThumbsUp, CheckSquare, MessageSquare, Send
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import { 
@@ -22,16 +22,90 @@ import { VoiceHuddleClient, playChime } from './voice';
 import { VideoConferenceClient } from './conference';
 import { ConferenceModal } from './ConferenceModal';
 
-type Page = 'office' | 'team' | 'attendance' | 'today' | 'announcements' | 'admin';
+export type FeedType = 'today' | 'announcement';
+
+export interface FeedComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface FeedReactions {
+  likes: string[];   // userIds who reacted ❤️ (ถูกใจ)
+  claps: string[];   // userIds who reacted 👍 (เยี่ยม)
+  noted: string[];   // userIds who reacted ✅ (รับทราบ)
+}
+
+export interface FeedPost {
+  id: string;
+  type: FeedType;
+  title: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string;
+  createdAt: string;
+  reactions: FeedReactions;
+  comments: FeedComment[];
+}
+
+const defaultFeedPosts: FeedPost[] = [
+  {
+    id: 'post-1',
+    type: 'announcement',
+    title: 'ยินดีต้อนรับสู่ PRIME Virtual Office',
+    content: 'พื้นที่ทำงานดิจิทัลและคอมมูนิตี้ของทีมไพร์ม ทุกคนสามารถเช็คอิน อัปเดตงาน ประชุมวิดีโอ และพูดคุยผ่านฟีดนี้ได้ตลอดเวลาครับ',
+    authorId: 'admin',
+    authorName: 'PRIME Admin',
+    authorAvatar: '🏢',
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    reactions: { likes: ['may', 'ton'], claps: ['kong'], noted: ['me'] },
+    comments: [
+      {
+        id: 'c-1',
+        authorId: 'may',
+        authorName: 'เมย์',
+        authorAvatar: '👩🏻‍💻',
+        content: 'ยินดีต้อนรับทุกคนค่า พร้อมลุยงานวันนี้ค่ะ ✨',
+        createdAt: new Date(Date.now() - 80000000).toISOString()
+      }
+    ]
+  },
+  {
+    id: 'post-2',
+    type: 'today',
+    title: 'อัปเดตระบบ WebRTC Meeting & Mobile UI วันนี้',
+    content: 'พัฒนาระบบ Video Conference ให้พร้อมใช้งาน และปรับขนาดให้รองรับหน้าจอมือถือ/แท็บเล็ตเรียบร้อยแล้วครับ',
+    authorId: 'ton',
+    authorName: 'ต้น (Dev Lead)',
+    authorAvatar: '👨🏻‍💻',
+    createdAt: new Date(Date.now() - 14400000).toISOString(),
+    reactions: { likes: ['me', 'may'], claps: ['ploy'], noted: ['beam'] },
+    comments: [
+      {
+        id: 'c-2',
+        authorId: 'ploy',
+        authorName: 'พลอย',
+        authorAvatar: '👩🏻‍💼',
+        content: 'เยี่ยมเลยค่ะ รองรับมือถือแบบนี้ทำงานสะดวกขึ้นมากเลย',
+        createdAt: new Date(Date.now() - 7200000).toISOString()
+      }
+    ]
+  }
+];
+
+type Page = 'office' | 'team' | 'attendance' | 'feed' | 'admin' | 'today' | 'announcements';
 type Knock = { id:string; sender: string; receiver_id?:string; room_id:RoomId; state:string; created_at:string };
 type Notice = { id:string; title:string; body:string };
 
 const nav = [
   { id: 'office', label: 'ออฟฟิศของเรา', icon: Home },
-  { id: 'team', label: 'สมาชิกทีม', icon: Users },
+  { id: 'feed', label: 'ฟีดงาน & ประกาศ', icon: ClipboardList },
   { id: 'attendance', label: 'ลงเวลา & ลางาน', icon: CalendarCheck },
-  { id: 'today', label: 'งานวันนี้', icon: ClipboardList },
-  { id: 'announcements', label: 'บอร์ดประกาศ', icon: Megaphone },
+  { id: 'team', label: 'สมาชิกทีม', icon: Users },
   { id: 'admin', label: 'ผู้ดูแลระบบ', icon: Settings }
 ] as const;
 
@@ -164,6 +238,28 @@ export default function App() {
       return 'demo-' + Math.random().toString(36).slice(2, 8);
     }
   });
+
+  // Unified Feed State (Work Today & Announcements)
+  const [feedPosts, setFeedPosts] = useState<FeedPost[]>(() => {
+    try {
+      const saved = localStorage.getItem('prime-feed-posts-v1');
+      return saved ? JSON.parse(saved) : defaultFeedPosts;
+    } catch {
+      return defaultFeedPosts;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('prime-feed-posts-v1', JSON.stringify(feedPosts));
+    } catch {}
+  }, [feedPosts]);
+
+  const [feedFilter, setFeedFilter] = useState<'all' | 'today' | 'announcement'>('all');
+  const [newPostType, setNewPostType] = useState<FeedType>('today');
+  const [newPostTitle, setNewPostTitle] = useState('');
+  const [newPostContent, setNewPostContent] = useState('');
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
 
   // Attendance & Leave State
   const todayDateStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -680,6 +776,122 @@ export default function App() {
       setProfileOpen(false);
       notify('บันทึกชื่อและรูปโปรไฟล์แล้ว');
     });
+  }
+
+  // Handle client-side image upload & resize for avatar
+  const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const size = 128;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const minDim = Math.min(img.width, img.height);
+          const sx = (img.width - minDim) / 2;
+          const sy = (img.height - minDim) / 2;
+          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          setEditAvatar(dataUrl);
+          notify('อัปโหลดและปรับขนาดรูปภาพเรียบร้อย');
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Unified Feed Handlers
+  const handleCreatePost = (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = newPostTitle.trim();
+    const content = newPostContent.trim();
+    if (!content) {
+      setError('กรุณาใส่เนื้อหาข้อความ');
+      return;
+    }
+    const newPost: FeedPost = {
+      id: 'post-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      type: newPostType,
+      title: title || (newPostType === 'today' ? `งานวันนี้ (${me.name})` : `ประกาศจาก ${me.name}`),
+      content,
+      authorId: me.id,
+      authorName: me.name,
+      authorAvatar: me.avatarUrl,
+      createdAt: new Date().toISOString(),
+      reactions: { likes: [], claps: [], noted: [] },
+      comments: []
+    };
+    setFeedPosts(prev => [newPost, ...prev]);
+    setNewPostTitle('');
+    setNewPostContent('');
+    notify(newPostType === 'today' ? 'บันทึกงานวันนี้ลงฟีดเรียบร้อย' : 'โพสต์ประกาศลงฟีดเรียบร้อย');
+  };
+
+  const handleToggleReaction = (postId: string, type: 'likes' | 'claps' | 'noted') => {
+    setFeedPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      const list = p.reactions[type] || [];
+      const has = list.includes(me.id);
+      const updated = has ? list.filter(id => id !== me.id) : [...list, me.id];
+      return {
+        ...p,
+        reactions: {
+          ...p.reactions,
+          [type]: updated
+        }
+      };
+    }));
+  };
+
+  const handleAddComment = (postId: string) => {
+    const text = (commentDrafts[postId] || '').trim();
+    if (!text) return;
+    const newComment: FeedComment = {
+      id: 'c-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      authorId: me.id,
+      authorName: me.name,
+      authorAvatar: me.avatarUrl,
+      content: text,
+      createdAt: new Date().toISOString()
+    };
+    setFeedPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      return {
+        ...p,
+        comments: [...(p.comments || []), newComment]
+      };
+    }));
+    setCommentDrafts(prev => ({ ...prev, [postId]: '' }));
+    notify('ส่งความคิดเห็นเรียบร้อย');
+  };
+
+  const handleDeletePost = (postId: string) => {
+    setFeedPosts(prev => prev.filter(p => p.id !== postId));
+    notify('ลบโพสต์เรียบร้อย');
+  };
+
+  function formatPostTime(isoStr: string) {
+    try {
+      const d = new Date(isoStr);
+      const now = Date.now();
+      const diff = Math.floor((now - d.getTime()) / 1000);
+      if (diff < 60) return 'เมื่อสักครู่';
+      if (diff < 3600) return `${Math.floor(diff / 60)} นาทีที่แล้ว`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)} ชม. ที่แล้ว`;
+      return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+    } catch {
+      return 'เมื่อสักครู่';
+    }
   }
 
   // Attendance Handlers (Work hours: 08:00 - 17:00)
@@ -1225,22 +1437,13 @@ export default function App() {
         </button>
 
         <button 
-          className={`dock-btn ${page === 'today' ? 'active' : ''}`} 
-          onClick={() => { setPage('today'); setSelectedRoomCard(null); }} 
-          title="สรุปงานประจำวันของทีม"
+          className={`dock-btn ${page === 'feed' || page === 'today' || page === 'announcements' ? 'active' : ''}`} 
+          onClick={() => { setPage('feed'); setSelectedRoomCard(null); }} 
+          title="ฟีดงาน & บอร์ดประกาศของทีม"
         >
           <ClipboardList size={19} />
-          <span className="dock-btn-label">งานวันนี้</span>
-        </button>
-
-        <button 
-          className={`dock-btn ${page === 'announcements' ? 'active' : ''}`} 
-          onClick={() => { setPage('announcements'); setSelectedRoomCard(null); }} 
-          title="บอร์ดประกาศบริษัท"
-        >
-          <Megaphone size={19} />
-          <span className="dock-btn-label">ประกาศ</span>
-          {notices.length > 0 && <span className="dock-badge">{notices.length}</span>}
+          <span className="dock-btn-label">ฟีด & งาน</span>
+          {feedPosts.length > 0 && <span className="dock-badge">{feedPosts.length}</span>}
         </button>
 
         {me.isAdmin && (
@@ -1681,66 +1884,253 @@ export default function App() {
             </div>
           )}
 
-          {/* PAGE: Today's Tasks */}
-          {page === 'today' && (
-            <section className="panel">
-              <h2>เป้าหมายเล็ก ๆ ของวันนี้</h2>
-              <form className="note-form" onSubmit={e => { e.preventDefault(); void updateProfile({ daily_note: note }); }}>
-                <label htmlFor="daily-note">งานของคุณ</label>
-                <textarea id="daily-note" value={note} maxLength={240} onChange={e => setNote(e.target.value)} placeholder="วันนี้ทำอะไร หรือมีอะไรอยากให้ทีมช่วย?" />
-                <button className="primary" disabled={busy}>บันทึกงานวันนี้</button>
-              </form>
-              <div className="daily-list">
-                {members.filter(m => m.note).map(m => (
-                  <article key={m.id}>
-                    <Avatar member={m} small />
-                    <div>
-                      <strong>{m.name}</strong>
-                      <p>{m.note}</p>
-                    </div>
-                  </article>
-                ))}
+          {/* PAGE: Unified Feed (Today Work + Announcements) */}
+          {(page === 'feed' || page === 'today' || page === 'announcements') && (
+            <div className="feed-container">
+              {/* 1. Filter Tabs */}
+              <div className="feed-filter-tabs">
+                <button 
+                  type="button" 
+                  className={`feed-tab-btn ${feedFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setFeedFilter('all')}
+                >
+                  <span>ทั้งหมด</span>
+                  <span style={{ opacity: 0.8 }}>({feedPosts.length})</span>
+                </button>
+                <button 
+                  type="button" 
+                  className={`feed-tab-btn ${feedFilter === 'today' ? 'active' : ''}`}
+                  onClick={() => setFeedFilter('today')}
+                >
+                  <span>💼 งานวันนี้</span>
+                  <span style={{ opacity: 0.8 }}>({feedPosts.filter(p => p.type === 'today').length})</span>
+                </button>
+                <button 
+                  type="button" 
+                  className={`feed-tab-btn ${feedFilter === 'announcement' ? 'active' : ''}`}
+                  onClick={() => setFeedFilter('announcement')}
+                >
+                  <span>📢 เรื่องประกาศ</span>
+                  <span style={{ opacity: 0.8 }}>({feedPosts.filter(p => p.type === 'announcement').length})</span>
+                </button>
               </div>
-            </section>
-          )}
 
-          {/* PAGE: Announcements */}
-          {page === 'announcements' && (
-            <section className="panel">
-              <h2>เรื่องที่ทีมควรรู้</h2>
-              {notices.length === 0 && <p className="empty-inline">ยังไม่มีประกาศ ผู้ดูแลสามารถเพิ่มประกาศแรกได้</p>}
-              {notices.map(n => (
-                <article className="announcement" key={n.id}>
-                  <Megaphone size={22} />
-                  <div>
-                    <h3>{n.title}</h3>
-                    <p>{n.body}</p>
+              {/* 2. Composer Card (Open to all members) */}
+              <div className="feed-composer-card">
+                <form onSubmit={handleCreatePost}>
+                  <div className="feed-composer-header">
+                    <div className="feed-author-meta">
+                      <Avatar member={me} small />
+                      <div className="feed-author-text">
+                        <strong>{me.name}</strong>
+                        <small>แชร์ให้เพื่อนร่วมทีม</small>
+                      </div>
+                    </div>
+                    <div className="feed-type-selector">
+                      <button 
+                        type="button" 
+                        className={`type-pill-btn today ${newPostType === 'today' ? 'active today' : ''}`}
+                        onClick={() => setNewPostType('today')}
+                      >
+                        💼 งานวันนี้
+                      </button>
+                      <button 
+                        type="button" 
+                        className={`type-pill-btn announcement ${newPostType === 'announcement' ? 'active announcement' : ''}`}
+                        onClick={() => setNewPostType('announcement')}
+                      >
+                        📢 เรื่องประกาศ
+                      </button>
+                    </div>
                   </div>
-                </article>
-              ))}
-              {me.isAdmin && (
-                <form className="admin-form" onSubmit={e => {
-                  e.preventDefault();
-                  void action(async () => {
-                    if (demo) {
-                      setNotices(n => [{ id: crypto.randomUUID(), title: newTitle, body: newBody }, ...n]);
-                    } else {
-                      const { error } = await supabase!.rpc('admin_post_announcement', { p_title: newTitle, p_body: newBody });
-                      if (error) throw error;
-                      await refresh();
-                    }
-                    setNewTitle('');
-                    setNewBody('');
-                    notify(demo ? 'เพิ่มประกาศสาธิตในหน้านี้แล้ว' : 'เผยแพร่ประกาศแล้ว');
-                  });
-                }}>
-                  <h3>เพิ่มประกาศ</h3>
-                  <label>หัวข้อ<input required value={newTitle} maxLength={120} onChange={e => setNewTitle(e.target.value)} /></label>
-                  <label>รายละเอียด<textarea required value={newBody} maxLength={2000} onChange={e => setNewBody(e.target.value)} /></label>
-                  <button className="primary" disabled={busy}>เผยแพร่ประกาศ{demo ? 'สาธิต' : ''}</button>
+
+                  <div style={{ marginBottom: '10px' }}>
+                    <input 
+                      type="text" 
+                      placeholder={newPostType === 'today' ? "หัวข้องานวันนี้ (เช่น พัฒนาฟีเจอร์, เตรียมเอกสาร...)" : "หัวข้อเรื่องประกาศ (เช่น นัดหมายสำคัญ, กิจกรรมทีม...)"}
+                      value={newPostTitle}
+                      onChange={e => setNewPostTitle(e.target.value)}
+                      maxLength={120}
+                      style={{ width: '100%', padding: '9px 12px', fontSize: '13px', borderRadius: '10px', border: '1px solid #cbd5e1' }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '12px' }}>
+                    <textarea 
+                      required
+                      rows={3}
+                      placeholder={newPostType === 'today' ? "วันนี้ทำอะไรอยู่ หรือมีเรื่องที่อยากให้ทีมช่วย?" : "พิมพ์รายละเอียดเรื่องประกาศที่ทุกคนควรรู้..."}
+                      value={newPostContent}
+                      onChange={e => setNewPostContent(e.target.value)}
+                      maxLength={1000}
+                      style={{ width: '100%', padding: '10px 12px', fontSize: '13px', borderRadius: '10px', border: '1px solid #cbd5e1', resize: 'vertical' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="submit" className="primary" style={{ padding: '8px 18px', fontSize: '12px' }}>
+                      <Send size={13} style={{ marginRight: '6px' }} /> โพสต์{newPostType === 'today' ? 'งานวันนี้' : 'เรื่องประกาศ'}
+                    </button>
+                  </div>
                 </form>
-              )}
-            </section>
+              </div>
+
+              {/* 3. Feed Posts List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {feedPosts
+                  .filter(p => feedFilter === 'all' || p.type === feedFilter)
+                  .map(post => {
+                    const isAuthor = post.authorId === me.id;
+                    const canDelete = isAuthor || me.isAdmin;
+                    const authorMember = members.find(m => m.id === post.authorId);
+                    const authorDisplayMember: Member = authorMember || {
+                      id: post.authorId,
+                      name: post.authorName,
+                      role: 'ทีม PRIME',
+                      room: 'hub',
+                      status: 'available',
+                      online: false,
+                      color: 'blue',
+                      avatarUrl: post.authorAvatar
+                    };
+
+                    return (
+                      <article className="feed-post-card" key={post.id}>
+                        {/* Post Header */}
+                        <div className="feed-post-header">
+                          <div className="feed-author-meta">
+                            <Avatar member={authorDisplayMember} small />
+                            <div className="feed-author-text">
+                              <strong>{post.authorName}</strong>
+                              <small>{formatPostTime(post.createdAt)}</small>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className={`feed-tag-badge ${post.type}`}>
+                              {post.type === 'today' ? '💼 งานวันนี้' : '📢 เรื่องประกาศ'}
+                            </span>
+                            {canDelete && (
+                              <button 
+                                type="button" 
+                                onClick={() => handleDeletePost(post.id)}
+                                title="ลบโพสต์นี้"
+                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Post Content */}
+                        <div className="feed-post-content">
+                          {post.title && <h3>{post.title}</h3>}
+                          <p>{post.content}</p>
+                        </div>
+
+                        {/* Reactions Bar */}
+                        <div className="feed-reaction-bar">
+                          <button 
+                            type="button"
+                            className={`reaction-btn like ${(post.reactions.likes || []).includes(me.id) ? 'active' : ''}`}
+                            onClick={() => handleToggleReaction(post.id, 'likes')}
+                            title="กดถูกใจ (Like)"
+                          >
+                            <Heart size={13} fill={(post.reactions.likes || []).includes(me.id) ? 'currentColor' : 'none'} />
+                            <span>ถูกใจ</span>
+                            {(post.reactions.likes || []).length > 0 && <strong>{(post.reactions.likes || []).length}</strong>}
+                          </button>
+
+                          <button 
+                            type="button"
+                            className={`reaction-btn clap ${(post.reactions.claps || []).includes(me.id) ? 'active' : ''}`}
+                            onClick={() => handleToggleReaction(post.id, 'claps')}
+                            title="กดเยี่ยม (Great)"
+                          >
+                            <ThumbsUp size={13} fill={(post.reactions.claps || []).includes(me.id) ? 'currentColor' : 'none'} />
+                            <span>เยี่ยม</span>
+                            {(post.reactions.claps || []).length > 0 && <strong>{(post.reactions.claps || []).length}</strong>}
+                          </button>
+
+                          <button 
+                            type="button"
+                            className={`reaction-btn noted ${(post.reactions.noted || []).includes(me.id) ? 'active' : ''}`}
+                            onClick={() => handleToggleReaction(post.id, 'noted')}
+                            title="กดรับทราบ (Noted)"
+                          >
+                            <CheckSquare size={13} />
+                            <span>รับทราบ</span>
+                            {(post.reactions.noted || []).length > 0 && <strong>{(post.reactions.noted || []).length}</strong>}
+                          </button>
+
+                          <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <MessageSquare size={13} />
+                            <span>{(post.comments || []).length} ความคิดเห็น</span>
+                          </div>
+                        </div>
+
+                        {/* Comments Section */}
+                        <div className="feed-comment-section">
+                          {(post.comments && post.comments.length > 0) && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {post.comments.map(c => {
+                                const cMember = members.find(m => m.id === c.authorId) || {
+                                  id: c.authorId,
+                                  name: c.authorName,
+                                  role: 'ทีม PRIME',
+                                  room: 'hub',
+                                  status: 'available',
+                                  online: false,
+                                  color: 'blue',
+                                  avatarUrl: c.authorAvatar
+                                };
+                                return (
+                                  <div className="feed-comment-row" key={c.id}>
+                                    <Avatar member={cMember} small />
+                                    <div className="feed-comment-bubble">
+                                      <strong>{c.authorName}</strong>
+                                      <p>{c.content}</p>
+                                      <small>{formatPostTime(c.createdAt)}</small>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Comment Input */}
+                          <form 
+                            className="feed-comment-input-row" 
+                            onSubmit={e => {
+                              e.preventDefault();
+                              handleAddComment(post.id);
+                            }}
+                          >
+                            <input 
+                              type="text"
+                              placeholder="เขียนความคิดเห็นหรือตอบกลับ…"
+                              value={commentDrafts[post.id] || ''}
+                              onChange={e => setCommentDrafts({ ...commentDrafts, [post.id]: e.target.value })}
+                              maxLength={300}
+                            />
+                            <button type="submit" disabled={!commentDrafts[post.id]?.trim()}>
+                              ตอบ
+                            </button>
+                          </form>
+                        </div>
+                      </article>
+                    );
+                  })}
+
+                {feedPosts.filter(p => feedFilter === 'all' || p.type === feedFilter).length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8', background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                    <ClipboardList size={36} style={{ margin: '0 auto 10px', opacity: 0.5 }} />
+                    <p style={{ margin: 0, fontSize: '13px' }}>ยังไม่มีรายการในหมวดนี้ โพสต์เป็นคนแรกได้เลย!</p>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {/* PAGE: Admin Dashboard */}
@@ -1876,8 +2266,32 @@ export default function App() {
                 <label style={{ fontSize: '12px', color: '#688090', display: 'block', marginBottom: '6px' }}>ชื่อของคุณ</label>
                 <input required maxLength={80} style={{ width: '100%' }} value={editName} onChange={e => setEditName(e.target.value)} placeholder="เช่น เมย์, ต้น, ก้อง…" />
               </div>
+              
               <div style={{ textAlign: 'left', marginBottom: '14px' }}>
-                <label style={{ fontSize: '12px', color: '#688090', display: 'block', marginBottom: '6px' }}>เลือกการ์ตูนประจำตัว</label>
+                <label style={{ fontSize: '12px', color: '#688090', display: 'block', marginBottom: '6px' }}>รูปภาพโพรไฟล์ของคุณ</label>
+                <div className="upload-avatar-row">
+                  <label className="upload-avatar-btn">
+                    <Camera size={14} /> อัปโหลดรูปภาพจากอุปกรณ์
+                    <input type="file" accept="image/*" onChange={handleAvatarFileUpload} />
+                  </label>
+                  {editAvatar && (
+                    <button 
+                      type="button" 
+                      className="secondary" 
+                      style={{ padding: '6px 10px', fontSize: '11px' }} 
+                      onClick={() => setEditAvatar('')}
+                    >
+                      ลบรูป
+                    </button>
+                  )}
+                </div>
+                <small style={{ color: '#94a3b8', fontSize: '10px', display: 'block', marginTop: '4px' }}>
+                  รองรับไฟล์ภาพจากมือถือหรือคอมพิวเตอร์ (ปรับขนาดอัตโนมัติ)
+                </small>
+              </div>
+
+              <div style={{ textAlign: 'left', marginBottom: '14px' }}>
+                <label style={{ fontSize: '12px', color: '#688090', display: 'block', marginBottom: '6px' }}>หรือเลือกการ์ตูนประจำตัว</label>
                 <div className="emoji-selector">
                   {['👩🏻‍💻', '👨🏻‍💻', '🧑🏻‍💼', '👩🏻‍💼', '🧑🏻‍🎨', '👨🏻‍🔬', '🦊', '🐱', '🐶', '🐼', '🚀', '☕', '🎧', '🌟'].map(emoji => (
                     <button type="button" key={emoji} className={`emoji-btn ${editAvatar === emoji ? 'active' : ''}`} onClick={() => setEditAvatar(emoji)}>
