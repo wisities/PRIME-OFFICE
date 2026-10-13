@@ -1186,7 +1186,7 @@ export default function App() {
 
         {/* WebRTC Video Conference Launcher */}
         <button 
-          className={`dock-conference-btn ${conferenceOpen ? 'active' : ''}`} 
+          className={`dock-btn ${conferenceOpen ? 'active' : ''}`} 
           onClick={() => {
             if (conferenceOpen) {
               setIsConferenceMinimized(false);
@@ -1194,11 +1194,11 @@ export default function App() {
               void startConference(me.room || 'project');
             }
           }} 
-          title="เปิดห้องประชุมวิดีโอ (WebRTC Video Conference)"
+          title="ห้องประชุมวิดีโอ (WebRTC Meeting)"
         >
-          <Video size={16} />
-          <span>{conferenceOpen ? 'เปิดห้องประชุม' : 'ประชุมวิดีโอ'}</span>
-          {conferenceOpen && <span className="dock-live-dot" />}
+          <Video size={19} color={conferenceOpen ? '#38ef7d' : undefined} />
+          <span className="dock-btn-label">Meeting</span>
+          {conferenceOpen && <span className="dock-badge" style={{ background: '#10b981' }}>LIVE</span>}
         </button>
 
         <div className="dock-divider" />
