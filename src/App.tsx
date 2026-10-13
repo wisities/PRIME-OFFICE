@@ -351,7 +351,8 @@ export default function App() {
       supabase.from('knocks').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.from('office_presence').select('*'),
       supabase.from('attendance_logs').select('*').order('created_at', { ascending: false }).limit(100),
-      supabase.from('leave_requests').select('*').eq('status', 'approved').order('created_at', { ascending: false }).limit(100)
+      supabase.from('leave_requests').select('*').eq('status', 'approved').order('created_at', { ascending: false }).limit(100),
+      supabase.from('feed_posts').select('*').order('created_at', { ascending: false }).limit(60)
     ]);
 
     const failure = results[0].error || results[1].error || results[2].error || results[3].error;
@@ -387,6 +388,26 @@ export default function App() {
     const attData: AttendanceRecord[] = results[5].data || [];
     setLiveAttendance(attData);
     setLiveLeaves(leavesData);
+
+    const feedRows = results[7]?.data;
+    if (feedRows && Array.isArray(feedRows)) {
+      setFeedPosts(feedRows.map((r: any) => ({
+        id: r.id,
+        type: r.type,
+        title: r.title,
+        content: r.content,
+        authorId: r.author_id,
+        authorName: r.author_name,
+        authorAvatar: r.author_avatar,
+        createdAt: r.created_at,
+        reactions: {
+          likes: Array.isArray(r.reactions?.likes) ? r.reactions.likes : [],
+          claps: Array.isArray(r.reactions?.claps) ? r.reactions.claps : [],
+          noted: Array.isArray(r.reactions?.noted) ? r.reactions.noted : [],
+        },
+        comments: Array.isArray(r.comments) ? r.comments : []
+      })));
+    }
 
     const todayStr = new Date().toISOString().slice(0, 10);
     const activeLeavesToday = leavesData.filter(l => l.start_date <= todayStr && l.end_date >= todayStr && l.status === 'approved');
@@ -446,6 +467,7 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'knocks' }, () => void sync())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => void sync())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => void sync())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feed_posts' }, () => void sync())
       .subscribe(status => { if (!cancelled) setConnected(status === 'SUBSCRIBED'); });
 
     const interval = setInterval(() => void heartbeat(), 30000);
@@ -882,8 +904,8 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // Unified Feed Handlers
-  const handleCreatePost = (e: React.FormEvent) => {
+  // Unified Feed Handlers (Real-time synchronized via Supabase)
+  const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     const title = newPostTitle.trim();
     const content = newPostContent.trim();
@@ -891,25 +913,44 @@ export default function App() {
       setError('กรุณาใส่เนื้อหาข้อความ');
       return;
     }
-    const newPost: FeedPost = {
-      id: 'post-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-      type: newPostType,
-      title: title || (newPostType === 'today' ? `งานวันนี้ (${me.name})` : `ประกาศจาก ${me.name}`),
-      content,
-      authorId: me.id,
-      authorName: me.name,
-      authorAvatar: me.avatarUrl,
-      createdAt: new Date().toISOString(),
-      reactions: { likes: [], claps: [], noted: [] },
-      comments: []
-    };
-    setFeedPosts(prev => [newPost, ...prev]);
-    setNewPostTitle('');
-    setNewPostContent('');
-    notify(newPostType === 'today' ? 'บันทึกงานวันนี้ลงฟีดเรียบร้อย' : 'โพสต์ประกาศลงฟีดเรียบร้อย');
+    const finalTitle = title || (newPostType === 'today' ? `งานวันนี้ (${me.name})` : `ประกาศจาก ${me.name}`);
+    
+    if (demo || !supabase || !session) {
+      const newPost: FeedPost = {
+        id: 'post-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        type: newPostType,
+        title: finalTitle,
+        content,
+        authorId: me.id,
+        authorName: me.name,
+        authorAvatar: me.avatarUrl,
+        createdAt: new Date().toISOString(),
+        reactions: { likes: [], claps: [], noted: [] },
+        comments: []
+      };
+      setFeedPosts(prev => [newPost, ...prev]);
+      setNewPostTitle('');
+      setNewPostContent('');
+      notify(newPostType === 'today' ? 'บันทึกงานวันนี้ลงฟีดเรียบร้อย' : 'โพสต์ประกาศลงฟีดเรียบร้อย');
+      return;
+    }
+
+    await action(async () => {
+      const { error: rpcErr } = await supabase!.rpc('post_feed_item', {
+        p_type: newPostType,
+        p_title: finalTitle,
+        p_content: content
+      });
+      if (rpcErr) throw rpcErr;
+      setNewPostTitle('');
+      setNewPostContent('');
+      await refresh();
+      notify(newPostType === 'today' ? 'บันทึกงานวันนี้ลงฟีดเรียบร้อย' : 'โพสต์ประกาศลงฟีดเรียบร้อย');
+    });
   };
 
-  const handleToggleReaction = (postId: string, type: 'likes' | 'claps' | 'noted') => {
+  const handleToggleReaction = async (postId: string, type: 'likes' | 'claps' | 'noted') => {
+    // 1. Optimistic update for instant responsiveness
     setFeedPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
       const list = p.reactions[type] || [];
@@ -923,12 +964,24 @@ export default function App() {
         }
       };
     }));
+
+    if (!demo && supabase && session) {
+      try {
+        const { error: rpcErr } = await supabase.rpc('toggle_feed_reaction', {
+          p_post_id: postId,
+          p_reaction: type
+        });
+        if (rpcErr) console.warn('toggle_feed_reaction err:', rpcErr);
+      } catch (err) {
+        console.warn('Failed to sync reaction:', err);
+      }
+    }
   };
 
-  const handleAddComment = (postId: string) => {
+  const handleAddComment = async (postId: string) => {
     const text = (commentDrafts[postId] || '').trim();
     if (!text) return;
-    const newComment: FeedComment = {
+    const tempComment: FeedComment = {
       id: 'c-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
       authorId: me.id,
       authorName: me.name,
@@ -936,20 +989,48 @@ export default function App() {
       content: text,
       createdAt: new Date().toISOString()
     };
-    setFeedPosts(prev => prev.map(p => {
-      if (p.id !== postId) return p;
-      return {
-        ...p,
-        comments: [...(p.comments || []), newComment]
-      };
-    }));
-    setCommentDrafts(prev => ({ ...prev, [postId]: '' }));
-    notify('ส่งความคิดเห็นเรียบร้อย');
+
+    if (demo || !supabase || !session) {
+      setFeedPosts(prev => prev.map(p => {
+        if (p.id !== postId) return p;
+        return {
+          ...p,
+          comments: [...(p.comments || []), tempComment]
+        };
+      }));
+      setCommentDrafts(prev => ({ ...prev, [postId]: '' }));
+      notify('ส่งความคิดเห็นเรียบร้อย');
+      return;
+    }
+
+    await action(async () => {
+      const { error: rpcErr } = await supabase!.rpc('add_feed_comment', {
+        p_post_id: postId,
+        p_content: text
+      });
+      if (rpcErr) throw rpcErr;
+      setCommentDrafts(prev => ({ ...prev, [postId]: '' }));
+      await refresh();
+      notify('ส่งความคิดเห็นเรียบร้อย');
+    });
   };
 
-  const handleDeletePost = (postId: string) => {
+  const handleDeletePost = async (postId: string) => {
+    // Optimistic delete
     setFeedPosts(prev => prev.filter(p => p.id !== postId));
     notify('ลบโพสต์เรียบร้อย');
+
+    if (!demo && supabase && session) {
+      try {
+        const { error: rpcErr } = await supabase.rpc('delete_feed_post', {
+          p_post_id: postId
+        });
+        if (rpcErr) console.warn('delete_feed_post err:', rpcErr);
+        await refresh();
+      } catch (err) {
+        console.warn('Failed to sync post deletion:', err);
+      }
+    }
   };
 
   function formatPostTime(isoStr: string) {
