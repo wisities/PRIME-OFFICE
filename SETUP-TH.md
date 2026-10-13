@@ -38,23 +38,28 @@ URL หน้าจัดการ `supabase.com/dashboard/project/...` ไม�
 
 ทุกห้องในรุ่นแรกเป็นห้องภายในที่สมาชิกบริษัทเข้าได้เหมือนกัน คำขอเคาะประตูคือการชวนคุย ไม่ใช่การล็อกห้อง ยังไม่มีแขกภายนอกหรือห้องโปรเจกต์จำกัดสิทธิ์
 
-## 3. สร้าง Cloudflare และเผยแพร่เว็บ
+## 3. สถาปัตยกรรมและระบบ CI/CD (Cloudflare Pages + GitHub)
 
-1. เข้า https://dash.cloudflare.com/sign-up สมัครบัญชีด้วยอีเมลบริษัท/ผู้ดูแลและยืนยันอีเมล
-2. เข้า Workers & Pages > Create application
-3. เลือกเส้นทาง Pages แล้ว Get started > Drag and drop your files หรือ Upload assets (ชื่ออาจต่างตามหน้า Dashboard)
-4. ตั้งชื่อ เช่น `prime-teamwork` หากซ้ำให้เติมชื่อย่อบริษัท
-5. อัปโหลดเนื้อหาโฟลเดอร์ `dist` หรือไฟล์ `prime-cloudflare.zip` ที่เตรียมไว้ใน `release`
-6. กด Deploy site แล้วรอ URL ที่ Cloudflare คืนมา เช่น `https://prime-teamwork.pages.dev` — เป็นเพียงตัวอย่าง ชื่อจริงขึ้นกับที่จองได้
-7. เปิด URL ตรวจว่าหน้าเข้าสู่ระบบและปุ่มลองใช้งานแสดงถูกต้อง
+ระบบใช้งานอยู่ในรูปแบบ **Automated Git Integration** โดยสมบูรณ์:
 
-ไม่ต้องซื้อโดเมน ไม่ต้องเพิ่ม nameserver หรือย้ายโดเมนบริษัท สำหรับการใช้ `pages.dev`
+- **Repository:** `https://github.com/wisities/PRIME-OFFICE`
+- **Production Branch:** `master` (ซิงก์กับ `main`)
+- **Hosting:** Cloudflare Pages
+- **URL เว็บไซต์จริง:** `https://prime-virtual-office.pages.dev`
+- **Build Command:** `npm run build`
+- **Build Output Directory:** `dist`
+- **Node.js Environment:** Version 20 (กำหนดผ่าน `.nvmrc` และ `NODE_VERSION=20`)
 
-สำคัญ: ต้องอัปโหลดไฟล์จาก `dist` ไม่ใช่โฟลเดอร์ src หรือทั้งโปรเจกต์ ใน zip ต้องเห็น `index.html`, `_headers`, `_redirects`, `assets/` ที่ระดับบนสุด
+### ขั้นตอนการทำงาน (Workflow) ประจำวัน:
+1. เมื่อมีการแก้ไขโค้ดและทดสอบในเครื่องเสร็จเรียบร้อย
+2. สั่ง Commit และรัน `git push origin master`
+3. Cloudflare Pages จะตรวจจับการเปลี่ยนแปลงผ่าน GitHub Webhook โดยอัตโนมัติ
+4. Cloudflare Pages จะรันคำสั่ง `npm run build` และ Deploy หน้าเว็บจริงให้อัตโนมัติภายใน 1–2 นาที โดยไม่ต้องเข้าหน้า Dashboard เพื่ออัปโหลดไฟล์ด้วยตนเองอีกต่อไป
 
-วิธี Direct Upload นี้ build ในเครื่องแล้ว จึงไม่ต้องกรอก Environment variables ใน Cloudflare Dashboard หากเปลี่ยน Supabase URL/key ให้แก้ `.env.local`, รัน `npm run build` แล้วอัปโหลด dist ใหม่
-
-หากภายหลังต้องการ deploy อัตโนมัติจาก Git ให้สร้างโปรเจกต์ Pages แบบ Git integration ตามเอกสาร Cloudflare เพราะโปรเจกต์ Direct Upload ไม่สามารถสลับเป็น Git integration ได้โดยตรง
+### Environment Variables ที่จำเป็นใน Cloudflare Pages:
+- `VITE_SUPABASE_URL`: `https://hytecxupvfhqaddtymcx.supabase.co`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`: `sb_publishable_8MSmQbTUPo2WGc9eV122PA_T3ljJpvr`
+- `NODE_VERSION`: `20`
 
 ## 4. ตั้งค่าลิงก์กลับเข้าเว็บใน Supabase
 
@@ -67,6 +72,7 @@ URL เว็บไซต์จริง (Cloudflare Pages):
 3. Redirect URLs เพิ่ม:
    `https://prime-virtual-office.pages.dev/`
    และเพิ่ม `http://127.0.0.1:5174/` (สำหรับการทดสอบในเครื่อง)
+   และ `http://localhost:5173/` (สำหรับการทดสอบ Vite ในเครื่อง)
 4. กด Save changes
 
 อย่าใส่ wildcard ของทั้ง `pages.dev` เพราะจะเปิดให้ redirect ไปเว็บอื่น
@@ -117,6 +123,27 @@ URL เว็บไซต์จริง (Cloudflare Pages):
 - ประกาศสาธิตและลิงก์ประชุมสาธิตเก็บในหน่วยความจำชั่วคราว งานและตำแหน่งสาธิตเก็บใน localStorage
 - ไม่มีบริการส่งอีเมล/แจ้งเตือนเมื่อปิดเว็บ ไม่มีบันทึกประชุม และไม่มีการติดตามผลงานจากเวลาออนไลน์
 - สำรองฐานข้อมูลก่อนแก้ schema และทดสอบกู้คืนก่อนใช้ข้อมูลสำคัญ รุ่นนี้ยังไม่ตั้งงานสำรองอัตโนมัติ
+
+## 8. ระบบวันหยุดราชการและการลงเวลาทำงาน (Thai Public Holidays & Leave Engine)
+
+บริษัท ไพร์มดิจิทัลคอนซัลแทนท์ จำกัด ปฏิบัติตาม **ปฏิทินวันหยุดราชการไทยจริง (หยุดตามราชการ)**:
+- **ฐานข้อมูลวันหยุดราชการ (`src/domain.mjs`):** รวบรวมวันหยุดนักขัตฤกษ์คงที่ประจำปี และวันหยุดตามมติคณะรัฐมนตรี (ครม.) สำหรับปี พ.ศ. 2567–2570 (2024–2027) รวมถึงวันสำคัญทางพุทธศาสนาและวันหยุดพิเศษ
+- **คำนวณวันหยุดชดเชยอัตโนมัติ (`getThaiHolidaysList`):** หากวันหยุดนักขัตฤกษ์ตรงกับวันเสาร์หรืออาทิตย์ ระบบจะเพิ่มวันหยุดชดเชยในวันจันทร์ถัดไปให้อัตโนมัติ
+- **ระบบยืนยันวันหยุดบริษัท:**
+  - **Topbar Tag:** แสดงแท็กแจ้งเตือนวันหยุดราชการที่แถบด้านบนแบบเรียลไทม์ และเปลี่ยนปุ่มเช็คอินเข้างานเป็นโหมด "ทำงานวันหยุดพิเศษ"
+  - **Company Holiday Banner:** แสดงแบนเนอร์ยืนยันสถานะวันหยุดบริษัทอย่างเป็นทางการ พร้อมคำอธิบายว่าทีมงานสามารถพักผ่อนได้โดยไม่ต้องเช็คอินเข้างาน
+  - **Annual Public Holiday Calendar View:** สามารถเปิดดูปฏิทินวันหยุดราชการของบริษัทครบทั้งปี สลับดูปี พ.ศ. 2568, 2569, 2570 ได้
+- **ระบบคำนวณวันลา ไม่หักโควตาวันหยุด (`calculateWorkingDays`):**
+  - ในฟอร์มยื่นคำขอลางาน ระบบจะตรวจจับและ **หักวันหยุดราชการของบริษัทและเสาร์-อาทิตย์ออกให้อัตโนมัติ**
+  - คำนวณวันลาจริงสุทธิที่ใช้ (Working Days) ทำให้พนักงานไม่เสียโควตาวันลาในวันที่เป็นวันหยุดบริษัทอยู่แล้ว
+
+## 9. ระบบสื่อสารเสียงและการประชุม (Voice Huddle & Google Meet)
+
+- **Voice Huddle (WebRTC):** สมาชิกในห้องเดียวกันสามารถเปิดไมค์สนทนากันได้ทันที
+  - รองรับโหมด **Push-to-Talk (กด Spacebar ค้างเพื่อพูด)** และโหมดคลิกเปิด/ปิดไมค์
+  - มีระบบป้องกันไมค์ค้าง (Pointer capture) และระบบ Autoplay Audio Recovery
+  - มีระบบทดสอบไมค์ในตัว (Loopback test) สำหรับตรวจสอบระดับเสียงของตนเอง
+- **Google Meet Pop-up Window:** สามารถกดเปิด Google Meet ของแต่ละห้องขึ้นมาเป็นหน้าต่าง Pop-up ลอยบนหน้าจอ โดยไม่เปิดแท็บใหม่เต็มจอและไม่บังหน้าออฟฟิศหลัก
 
 ## พัฒนาในเครื่อง
 

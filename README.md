@@ -15,7 +15,9 @@ npm test
 npm run build
 ```
 
-Upload the **contents** of `dist/` to Cloudflare Pages (Direct Upload). Supabase config is embedded at build time, so rebuild when it changes. Do not upload the repository, `.env.local`, tests or SQL files as your site.
+Production site is automatically built and deployed to Cloudflare Pages (**https://prime-virtual-office.pages.dev**) on every `git push` to `master` via GitHub integration.
+
+Full architecture and operational guide in **[SETUP-TH.md](SETUP-TH.md)**.
 
 ## Backend setup
 
