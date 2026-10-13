@@ -4,15 +4,20 @@ import {
   Home, Users, ClipboardList, Megaphone, Settings, ArrowUpRight, DoorOpen, Hand, 
   Coffee, Focus, Video, X, Check, LogOut, Bell, Menu, ShieldCheck, Save, Map, 
   List, Wifi, WifiOff, CalendarCheck, Clock, CheckCircle2, AlertCircle, Plus, Trash2,
-  Mic, MicOff, Headphones, PhoneOff, Radio
+  Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import { 
   rooms as initialRooms, statuses, sampleMembers, sampleAttendance, sampleLeaves, 
   leaveTypesConfig, periodLabels, type Room, type RoomId, type Status, type Member, 
-  type AttendanceRecord, type LeaveRequest, type LeaveType 
+  type AttendanceRecord, type LeaveRequest, type LeaveType, type ThaiHoliday
 } from './data';
-import { loadDemo, validMeetUrl, normalizeEmail, checkAttendanceStatus, formatThaiTime } from './domain.mjs';
+import { 
+  loadDemo, validMeetUrl, normalizeEmail, checkAttendanceStatus, formatThaiTime,
+  getThaiPublicHoliday, getThaiHolidaysList, calculateWorkingDays, formatThaiFullDate,
+  THAI_ANNUAL_FIXED_HOLIDAYS, THAI_MONTH_NAMES
+} from './domain.mjs';
+import { VoiceHuddleClient, playChime } from './voice';
 
 type Page = 'office' | 'team' | 'attendance' | 'today' | 'announcements' | 'admin';
 type Knock = { id:string; sender: string; receiver_id?:string; room_id:RoomId; state:string; created_at:string };
@@ -27,10 +32,10 @@ const nav = [
   { id: 'admin', label: 'ผู้ดูแลระบบ', icon: Settings }
 ] as const;
 
-function Avatar({ member, small = false }: { member: Member; small?: boolean }) {
+function Avatar({ member, small = false, isSpeaking = false }: { member: Member; small?: boolean; isSpeaking?: boolean }) {
   const isImg = member.avatarUrl && (member.avatarUrl.startsWith('http') || member.avatarUrl.startsWith('data:'));
   return (
-    <span className={`avatar ${member.color} ${small ? 'small' : ''}`} aria-label={member.name}>
+    <span className={`avatar ${member.color} ${small ? 'small' : ''} ${isSpeaking ? 'speaking' : ''}`} aria-label={member.name}>
       {isImg ? (
         <img src={member.avatarUrl} alt={member.name} className="avatar-img" />
       ) : (
@@ -39,6 +44,7 @@ function Avatar({ member, small = false }: { member: Member; small?: boolean }) 
         </span>
       )}
       <i className={`status-dot ${member.online ? member.status : 'offline'}`} />
+      {isSpeaking && <span className="avatar-speaking-badge" title="กำลังพูด...">🎙️</span>}
       {member.leaveToday && (
         <span className="avatar-leave-badge" title={`${member.name}: ${member.leaveToday.label}`}>
           {member.leaveToday.emoji}
@@ -85,11 +91,17 @@ export default function App() {
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [knockTarget, setKnockTarget] = useState<Member | null>(null);
   
-  // Voice Huddle State (Discord/Slack style voice channels)
+  // Voice Huddle State (Real WebRTC Peer-to-Peer Voice)
   const [inHuddle, setInHuddle] = useState(false);
   const [huddleRoomId, setHuddleRoomId] = useState<RoomId | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
+  const [isLoopback, setIsLoopback] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speakingMembers, setSpeakingMembers] = useState<Set<string>>(new Set());
+  const [activeVoicePeers, setActiveVoicePeers] = useState<string[]>([]);
+  const [micLevel, setMicLevel] = useState(0);
+  const voiceClientRef = useRef<VoiceHuddleClient | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
 
   const [toast, setToast] = useState('');
@@ -111,9 +123,25 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
+  const [demoSessionId] = useState(() => {
+    try {
+      let id = sessionStorage.getItem('prime-demo-session-id');
+      if (!id) {
+        id = 'demo-' + Math.random().toString(36).slice(2, 8);
+        sessionStorage.setItem('prime-demo-session-id', id);
+      }
+      return id;
+    } catch {
+      return 'demo-' + Math.random().toString(36).slice(2, 8);
+    }
+  });
 
   // Attendance & Leave State
   const todayDateStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayHoliday = useMemo(() => getThaiPublicHoliday(todayDateStr), [todayDateStr]);
+  const [selectedHolidayYear, setSelectedHolidayYear] = useState(() => new Date().getFullYear());
+  const yearHolidaysList = useMemo(() => getThaiHolidaysList(selectedHolidayYear), [selectedHolidayYear]);
+  const [showHolidayCalendar, setShowHolidayCalendar] = useState(false);
   const [nowTime, setNowTime] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setNowTime(new Date()), 1000);
@@ -148,6 +176,7 @@ export default function App() {
   const [leaveEnd, setLeaveEnd] = useState(todayDateStr);
   const [leavePeriod, setLeavePeriod] = useState<'full' | 'morning' | 'afternoon'>('full');
   const [leaveReason, setLeaveReason] = useState('');
+  const leaveWorkingDaysCalc = useMemo(() => calculateWorkingDays(leaveStart, leaveEnd), [leaveStart, leaveEnd]);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notify = (text: string) => {
@@ -288,13 +317,13 @@ export default function App() {
   const userAvatar = session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture;
   const currentLive = liveMembers.find(m => m.id === session?.user.id);
   const me: Member = demo
-    ? { id: 'me', name: demoName, role: 'ทีม PRIME', room: demoState.room as RoomId, status: demoState.status as Status, online: true, color: 'blue', note: demoState.note, isAdmin: true, avatarUrl: demoAvatar }
+    ? { id: demoSessionId, name: demoName, role: 'ทีม PRIME', room: demoState.room as RoomId, status: demoState.status as Status, online: true, color: 'blue', note: demoState.note, isAdmin: true, avatarUrl: demoAvatar }
     : (currentLive ? { ...currentLive, avatarUrl: currentLive.avatarUrl || userAvatar } : { id: session?.user?.id || '', name: session?.user?.user_metadata?.full_name || 'สมาชิก', role: 'ทีม PRIME', room: 'hub', status: 'available', online: false, color: 'blue', avatarUrl: userAvatar });
 
   // Effective Attendance & Leaves data
   const attendanceList = demo ? demoAttendance : liveAttendance;
   const leavesList = demo ? demoLeaves : liveLeaves;
-  const todayMyAttendance = attendanceList.find(a => a.user_id === me.id && a.work_date === todayDateStr);
+  const todayMyAttendance = attendanceList.find(a => (a.user_id === me.id || (demo && (a.user_id === 'me' || a.user_id.startsWith('demo-')))) && a.work_date === todayDateStr);
 
   const activeLeavesToday = useMemo(() => {
     return leavesList.filter(l => l.start_date <= todayDateStr && l.end_date >= todayDateStr && l.status === 'approved');
@@ -325,48 +354,93 @@ export default function App() {
   const incoming = knocks.filter(k => k.state === 'pending' && Date.now() - new Date(k.created_at).getTime() < 300000);
 
   useEffect(() => { setNote(me.note || ''); }, [me.note, demo]);
-  const joinHuddle = useCallback(async (targetRoomId: RoomId) => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch((err) => {
-          console.warn('Microphone permission or hardware access issue:', err);
-          return null;
-        });
-        audioStreamRef.current = stream;
-      }
-    } catch (err) {
-      console.warn('getUserMedia check error:', err);
+
+  useEffect(() => {
+    if (voiceClientRef.current) {
+      voiceClientRef.current.updateIdentity(me.id, me.name);
     }
-    setInHuddle(true);
-    setHuddleRoomId(targetRoomId);
-    setIsMuted(false);
-    setIsDeafened(false);
-    const roomObj = rooms.find(r => r.id === targetRoomId);
-    notify(`เชื่อมต่อ Voice Huddle ในห้อง ${roomObj?.name || 'ทำงาน'} แล้ว 🎙️`);
-  }, [rooms]);
+  }, [me.id, me.name]);
+
+  useEffect(() => {
+    return () => {
+      if (voiceClientRef.current) {
+        voiceClientRef.current.leave();
+      }
+    };
+  }, []);
+
+  const joinHuddle = useCallback(async (targetRoomId: RoomId) => {
+    setError('');
+    try {
+      if (!voiceClientRef.current) {
+        voiceClientRef.current = new VoiceHuddleClient(me.id, me.name, supabase);
+      } else {
+        voiceClientRef.current.updateIdentity(me.id, me.name);
+      }
+      voiceClientRef.current.onStateChange = (state) => {
+        setActiveVoicePeers(state.activePeers);
+        setSpeakingMembers(state.speakingPeers);
+        setIsSpeaking(state.isSpeaking);
+        setIsLoopback(state.isLoopback);
+        setMicLevel(state.audioLevel);
+      };
+
+      const stream = await voiceClientRef.current.join(targetRoomId);
+      audioStreamRef.current = stream;
+      setInHuddle(true);
+      setHuddleRoomId(targetRoomId);
+      setIsMuted(false);
+      setIsDeafened(false);
+      setIsLoopback(false);
+      const roomObj = rooms.find(r => r.id === targetRoomId);
+      notify(`เชื่อมต่อ Voice Huddle ในห้อง ${roomObj?.name || 'ทำงาน'} แล้ว 🎙️`);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      console.error('Failed to join voice huddle:', err);
+      const msg = e?.message || 'ไม่สามารถเปิดไมโครโฟนได้';
+      setError(msg);
+      notify(msg);
+      if (voiceClientRef.current) {
+        voiceClientRef.current.leave();
+      }
+      setInHuddle(false);
+      setHuddleRoomId(null);
+    }
+  }, [me.id, me.name, rooms]);
 
   const leaveHuddle = useCallback(() => {
-    try {
-      if (audioStreamRef.current) {
-        audioStreamRef.current.getTracks().forEach(track => {
-          try { track.stop(); } catch {}
-        });
-        audioStreamRef.current = null;
-      }
-    } catch {}
+    if (voiceClientRef.current) {
+      voiceClientRef.current.leave();
+    }
+    audioStreamRef.current = null;
     setInHuddle(false);
     setHuddleRoomId(null);
+    setIsSpeaking(false);
+    setIsLoopback(false);
+    setSpeakingMembers(new Set());
+    setActiveVoicePeers([]);
+    setMicLevel(0);
     notify('ออกจาก Voice Huddle แล้ว 👋');
+  }, []);
+
+  const toggleLoopback = useCallback(() => {
+    setIsLoopback(prev => {
+      const next = !prev;
+      if (voiceClientRef.current) {
+        voiceClientRef.current.setLoopback(next);
+      }
+      notify(next ? '🔊 กำลังทดสอบไมค์ (คุณจะได้ยินเสียงตัวเองผ่านลำโพง/หูฟัง)' : 'ปิดโหมดทดสอบเสียงแล้ว');
+      return next;
+    });
   }, []);
 
   const toggleMute = useCallback(() => {
     setIsMuted(prev => {
       const next = !prev;
-      try {
-        if (audioStreamRef.current) {
-          audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = !next; });
-        }
-      } catch {}
+      if (voiceClientRef.current) {
+        voiceClientRef.current.setMute(next);
+      }
+      playChime(next ? 'stop' : 'start');
       return next;
     });
   }, []);
@@ -374,37 +448,72 @@ export default function App() {
   const startHoldTalk = useCallback(() => {
     if (!inHuddle) return;
     setIsMuted(false);
-    try {
-      if (audioStreamRef.current) {
-        audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
-      }
-    } catch {}
+    if (voiceClientRef.current) {
+      voiceClientRef.current.setMute(false);
+    }
+    playChime('start');
   }, [inHuddle]);
 
   const stopHoldTalk = useCallback(() => {
     if (!inHuddle) return;
     setIsMuted(true);
-    try {
-      if (audioStreamRef.current) {
-        audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
-      }
-    } catch {}
+    if (voiceClientRef.current) {
+      voiceClientRef.current.setMute(true);
+    }
+    playChime('stop');
   }, [inHuddle]);
 
   const toggleDeafen = useCallback(() => {
     setIsDeafened(prev => {
       const next = !prev;
+      if (voiceClientRef.current) {
+        voiceClientRef.current.setDeafen(next);
+      }
       if (next) {
         setIsMuted(true);
-        try {
-          if (audioStreamRef.current) {
-            audioStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
-          }
-        } catch {}
       }
       return next;
     });
   }, []);
+
+  const holdStartTimeRef = useRef(0);
+  const wasHoldTalkRef = useRef(false);
+
+  const handleMicPointerDown = useCallback(() => {
+    holdStartTimeRef.current = Date.now();
+    wasHoldTalkRef.current = false;
+    startHoldTalk();
+  }, [startHoldTalk]);
+
+  const handleMicPointerUp = useCallback(() => {
+    const elapsed = Date.now() - holdStartTimeRef.current;
+    if (elapsed >= 350) {
+      wasHoldTalkRef.current = true;
+      stopHoldTalk();
+    } else {
+      wasHoldTalkRef.current = false;
+    }
+    holdStartTimeRef.current = 0;
+  }, [stopHoldTalk]);
+
+  const handleMicPointerLeave = useCallback(() => {
+    if (holdStartTimeRef.current > 0) {
+      const elapsed = Date.now() - holdStartTimeRef.current;
+      if (elapsed >= 350) {
+        wasHoldTalkRef.current = true;
+        stopHoldTalk();
+      }
+      holdStartTimeRef.current = 0;
+    }
+  }, [stopHoldTalk]);
+
+  const handleMicClick = useCallback(() => {
+    if (wasHoldTalkRef.current) {
+      wasHoldTalkRef.current = false;
+      return;
+    }
+    toggleMute();
+  }, [toggleMute]);
 
   // When moving between rooms, if you leave the huddle room, leave huddle automatically
   useEffect(() => {
@@ -515,7 +624,8 @@ export default function App() {
   async function handleCheckIn() {
     await action(async () => {
       const now = new Date();
-      const status = checkAttendanceStatus(now);
+      const isHol = todayHoliday.isCompanyHoliday;
+      const status = isHol ? 'on_time' : checkAttendanceStatus(now);
       if (demo) {
         const newRecord: AttendanceRecord = {
           id: 'att-' + Date.now(),
@@ -530,7 +640,10 @@ export default function App() {
         if (error) throw error;
         await refresh();
       }
-      notify(`เช็คอินเข้างานแล้ว เวลา ${formatThaiTime(now.toISOString())} (${status === 'on_time' ? 'ตรงเวลา 👍' : 'สาย'})`);
+      const holMsg = todayHoliday.isPublicHoliday 
+        ? ` (ทำงานวันหยุดบริษัท: ${todayHoliday.name})` 
+        : todayHoliday.isWeekend ? ' (ทำงานวันหยุดสุดสัปดาห์)' : ` (${status === 'on_time' ? 'ตรงเวลา 👍' : 'สาย'})`;
+      notify(`เช็คอินเข้างานแล้ว เวลา ${formatThaiTime(now.toISOString())}${holMsg}`);
     });
   }
 
@@ -558,6 +671,10 @@ export default function App() {
     e.preventDefault();
     if (leaveEnd < leaveStart) {
       setError('วันที่สิ้นสุดต้องไม่มาก่อนวันที่เริ่มต้น');
+      return;
+    }
+    if (leaveWorkingDaysCalc.workingDays === 0 && leaveWorkingDaysCalc.totalDays > 0) {
+      notify('⚠️ ทุกวันที่เลือกเป็นวันหยุดของบริษัทอยู่แล้ว (หยุดตามราชการ) ไม่จำเป็นต้องยื่นลางานครับ');
       return;
     }
     await action(async () => {
@@ -590,7 +707,10 @@ export default function App() {
         await refresh();
       }
       setLeaveReason('');
-      notify(`ยื่น${cfg.label}สำเร็จ (อนุมัติทันที) มีผล ${leaveStart === leaveEnd ? leaveStart : `${leaveStart} ถึง ${leaveEnd}`}`);
+      const holDeduction = leaveWorkingDaysCalc.holidays.length > 0 
+        ? ` (หักวันหยุดราชการ ${leaveWorkingDaysCalc.holidays.length} วัน รวมใช้วันลาจริง ${leaveWorkingDaysCalc.workingDays} วันทำการ)`
+        : '';
+      notify(`ยื่น${cfg.label}สำเร็จ (อนุมัติทันที) มีผล ${leaveStart === leaveEnd ? leaveStart : `${leaveStart} ถึง ${leaveEnd}`}${holDeduction}`);
     });
   }
 
@@ -783,6 +903,19 @@ export default function App() {
           </div>
 
           <div className="topbar-right">
+            {/* Thai Public Holiday Tag in Topbar */}
+            {todayHoliday.isCompanyHoliday && (
+              <div 
+                className={`topbar-holiday-tag ${todayHoliday.isPublicHoliday ? 'public-holiday' : 'weekend'}`} 
+                title={`${todayHoliday.statusLabel} (หยุดตามราชการ)`}
+                onClick={() => { setPage('attendance'); setShowHolidayCalendar(true); }}
+                style={{ cursor: 'pointer' }}
+              >
+                <span className="holiday-dot" />
+                <span>{todayHoliday.isPublicHoliday ? `🏖️ วันหยุดบริษัท: ${todayHoliday.name}` : `🛋️ ${todayHoliday.name}`}</span>
+              </div>
+            )}
+
             {/* Quick Check-in Button in Topbar */}
             {todayMyAttendance ? (
               !todayMyAttendance.check_out_at ? (
@@ -807,14 +940,16 @@ export default function App() {
               )
             ) : (
               <button 
-                className="topbar-checkin-pill cta" 
+                className={`topbar-checkin-pill cta ${todayHoliday.isCompanyHoliday ? 'holiday-mode' : ''}`} 
                 onClick={handleCheckIn} 
                 disabled={busy}
-                title="คลิกเพื่อเช็คอินเข้างานประจำวัน (เวลาเริ่มงาน 08:00 น.)"
+                title={todayHoliday.isPublicHoliday 
+                  ? `วันนี้เป็นวันหยุดราชการ: ${todayHoliday.name} (ไม่ต้องเช็คอิน หรือกดเพื่อลงเวลาทำงานพิเศษ)` 
+                  : "คลิกเพื่อเช็คอินเข้างานประจำวัน (เวลาเริ่มงาน 08:00 น.)"}
               >
                 <Clock size={14} />
-                <span>เช็คอินเข้างาน</span>
-                <span className="pill-target">08:00</span>
+                <span>{todayHoliday.isPublicHoliday ? 'ทำงานวันหยุดพิเศษ' : 'เช็คอินเข้างาน'}</span>
+                <span className="pill-target">{todayHoliday.isPublicHoliday ? 'วันหยุด' : '08:00'}</span>
               </button>
             )}
 
@@ -909,7 +1044,7 @@ export default function App() {
                             <div className="map-avatars">
                               {people.slice(0, 4).map(m => (
                                 <button key={m.id} className="map-person" onClick={() => { setSelected(r.id); if (m.id !== me.id) setKnockTarget(m); }} aria-label={`${m.name} ${statuses[m.status]}`}>
-                                  <Avatar member={m} small />
+                                  <Avatar member={m} small isSpeaking={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking)} />
                                   <span>{m.id === me.id ? 'คุณ' : m.name}</span>
                                 </button>
                               ))}
@@ -956,11 +1091,17 @@ export default function App() {
                       <p className="empty-inline">ห้องว่าง แวะเข้ามาเป็นคนแรกได้เลย</p>
                     ) : occupants.map(m => (
                       <div className="person-row" key={m.id}>
-                        <Avatar member={m} small />
+                        <Avatar member={m} small isSpeaking={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking)} />
                         <div>
                           <strong>{m.name}{m.id === me.id ? ' (คุณ)' : ''}</strong>
                           <small>{m.leaveToday ? `${m.leaveToday.emoji} ${m.leaveToday.label}` : statuses[m.status]}</small>
                         </div>
+                        {inHuddle && huddleRoomId === room.id && (activeVoicePeers.includes(m.id) || m.id === me.id) && (
+                          <span className="huddle-member-chip" title={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking) ? 'กำลังพูด' : 'อยู่ในสายเสียง'}>
+                            <Mic size={10} color={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking) ? '#158659' : '#31785a'} />
+                            {speakingMembers.has(m.id) || (m.id === me.id && isSpeaking) ? 'พูดอยู่' : 'ในสาย'}
+                          </span>
+                        )}
                         {m.id !== me.id && (
                           <button className="icon-button" aria-label={'เคาะประตูคุยกับ ' + m.name} onClick={() => setKnockTarget(m)}>
                             <Hand size={17} />
@@ -986,29 +1127,60 @@ export default function App() {
                         <button 
                           type="button"
                           className={`talk-btn-large ${!isMuted ? 'speaking' : ''}`}
-                          onPointerDown={startHoldTalk}
-                          onPointerUp={stopHoldTalk}
-                          onPointerLeave={stopHoldTalk}
-                          onClick={toggleMute}
+                          onPointerDown={handleMicPointerDown}
+                          onPointerUp={handleMicPointerUp}
+                          onPointerLeave={handleMicPointerLeave}
+                          onClick={handleMicClick}
                           title="คลิกเพื่อเปิด/ปิดไมค์ หรือกดค้างเพื่อพูด (Spacebar)"
                         >
                           {!isMuted ? <Mic size={24} className="pulse-icon" /> : <MicOff size={24} />}
                           <div className="talk-btn-text">
-                            <strong>{!isMuted ? 'กำลังเปิดไมค์พูด…' : 'กดเพื่อเปิดไมค์ (หรือกดค้าง)'}</strong>
-                            <small>{!isMuted ? 'คลิกอีกครั้งเพื่อปิดไมค์' : 'กด 1 ครั้งพูด / กดค้าง / Spacebar'}</small>
+                            <strong>{!isMuted ? (isSpeaking ? '🎙️ กำลังส่งเสียงพูด…' : 'เปิดไมค์อยู่ (พูดได้เลย)') : 'กดเพื่อเปิดไมค์ (หรือกดค้าง)'}</strong>
+                            <small>{!isMuted ? 'คลิก 1 ครั้งเพื่อปิดไมค์' : 'คลิก 1 ครั้งเปิดไมค์ / กดค้างพูด / Spacebar'}</small>
                           </div>
                         </button>
+                        {!isMuted && (
+                          <div className="mic-level-meter" title={`ระดับสัญญาณไมค์: ${micLevel}%`}>
+                            <span className="mic-level-fill" style={{ width: `${micLevel}%` }} />
+                          </div>
+                        )}
                         <div className="talk-quick-row">
                           <button type="button" className={`talk-sub-btn ${isMuted ? 'muted' : 'active'}`} onClick={toggleMute}>
-                            {isMuted ? <MicOff size={14}/> : <Mic size={14}/>} {isMuted ? 'ไมค์ปิดอยู่' : 'ไมค์เปิด'}
+                            {isMuted ? <MicOff size={14}/> : <Mic size={14}/>} {isMuted ? 'ไมค์ปิด' : 'ไมค์เปิด'}
                           </button>
                           <button type="button" className={`talk-sub-btn ${isDeafened ? 'muted' : ''}`} onClick={toggleDeafen}>
                             <Headphones size={14}/> {isDeafened ? 'หูฟังปิด' : 'หูฟังเปิด'}
                           </button>
-                          <button type="button" className="talk-sub-btn hangup" onClick={leaveHuddle}>
-                            <PhoneOff size={14}/> ออกจาก Huddle
+                          <button type="button" className={`talk-sub-btn ${isLoopback ? 'active' : ''}`} onClick={toggleLoopback} title="กดเพื่อทดสอบฟังเสียงสะท้อนจากไมค์ตัวเอง">
+                            <Volume2 size={14}/> {isLoopback ? 'ฟังเสียงอยู่' : 'ทดสอบไมค์'}
                           </button>
                         </div>
+                        <button type="button" className="talk-sub-btn hangup" style={{ width: '100%', justifyContent: 'center' }} onClick={leaveHuddle}>
+                          <PhoneOff size={14}/> ออกจาก Voice Huddle
+                        </button>
+                        {activeVoicePeers.length <= 1 ? (
+                          <div className="talk-hint-box">
+                            <small>💡 <strong>คุณอยู่ในห้องคนเดียว:</strong> ระบบจะไม่สะท้อนเสียงไมค์เข้าลำโพงเพื่อกันเสียงหอน หากต้องการทดสอบว่าไมค์ดังไหม ให้กดปุ่ม <b>"ทดสอบไมค์"</b> ด้านบน หรือเปิดอีกแท็บ/หน้าต่างเพื่อลองคุยข้ามแท็บ</small>
+                            <button 
+                              type="button" 
+                              className={`talk-sub-btn ${isLoopback ? 'active' : ''}`} 
+                              onClick={toggleLoopback}
+                              style={{ width: '100%', marginTop: '8px', justifyContent: 'center' }}
+                            >
+                              <Volume2 size={14} /> {isLoopback ? '🔊 กำลังฟังเสียงไมค์ตัวเอง (กดเพื่อปิด)' : '🔊 กดตรงนี้เพื่อทดสอบฟังเสียงไมค์ตัวเองทันที'}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="talk-peers-info">
+                            <small>🟢 <strong>เชื่อมต่อเสียงแล้ว ({activeVoicePeers.length} คน):</strong> สมาชิกในห้องได้ยินเสียงกันทันที</small>
+                          </div>
+                        )}
+                        {speakingMembers.size > 0 && (
+                          <div className="active-speakers-tag">
+                            <span className="sound-dot" />
+                            <span>{members.filter(m => speakingMembers.has(m.id)).map(m => m.name).join(', ')} กำลังพูด…</span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <button className="primary huddle-join-btn" onClick={() => joinHuddle(room.id)}>
@@ -1053,6 +1225,72 @@ export default function App() {
           {/* PAGE: Attendance & Leave Management */}
           {page === 'attendance' && (
             <div className="attendance-page">
+              {/* Company Holiday Confirmation Banner */}
+              {todayHoliday.isCompanyHoliday ? (
+                <div className={`company-holiday-banner ${todayHoliday.isPublicHoliday ? 'public' : 'weekend'}`}>
+                  <div className="holiday-banner-badge">
+                    <span>{todayHoliday.isPublicHoliday ? '🇹🇭 วันหยุดราชการ' : '🛋️ วันหยุดสุดสัปดาห์'}</span>
+                    <span className="confirm-check">✓ ยืนยันเป็นวันหยุดบริษัท</span>
+                  </div>
+                  <div className="holiday-banner-body">
+                    <h2>{todayHoliday.isPublicHoliday ? `วันนี้เป็นวันหยุดของบริษัท: ${todayHoliday.name}` : `วันนี้เป็น${todayHoliday.name}`}</h2>
+                    <p>บริษัท ไพร์มดิจิทัลคอนซัลแทนท์ จำกัด ปฏิบัติตาม<strong>ปฏิทินวันหยุดราชการไทย ประจำปี พ.ศ. {new Date().getFullYear() + 543}</strong> ทีมงานสามารถพักผ่อนได้เต็มที่โดยไม่จำเป็นต้องเช็คอินเข้างาน</p>
+                  </div>
+                  <div className="holiday-banner-actions">
+                    <button type="button" className="text-button" onClick={() => setShowHolidayCalendar(!showHolidayCalendar)}>
+                      <CalendarCheck size={16} /> {showHolidayCalendar ? 'ซ่อนปฏิทินวันหยุด' : 'ดูปฏิทินวันหยุดราชการทั้งปี →'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="workday-banner">
+                  <div><span className="workday-dot" /><span>วันนี้เป็นวันทำงานปกติ · {formatThaiFullDate(todayDateStr)}</span></div>
+                  <button type="button" className="text-button" onClick={() => setShowHolidayCalendar(!showHolidayCalendar)}>
+                    <CalendarCheck size={15} /> {showHolidayCalendar ? 'ปิดปฏิทิน' : 'ตรวจเช็คปฏิทินวันหยุดราชการปีนี้'}
+                  </button>
+                </div>
+              )}
+
+              {/* Annual Holiday Calendar Panel */}
+              {showHolidayCalendar && (
+                <section className="panel holiday-calendar-card">
+                  <div className="holiday-calendar-header">
+                    <div>
+                      <h2>🇹🇭 ปฏิทินวันหยุดราชการของบริษัท ประจำปี พ.ศ. {selectedHolidayYear + 543} ({selectedHolidayYear})</h2>
+                      <p>อ้างอิงตามประกาศมติคณะรัฐมนตรี (ครม.) · บริษัทหยุดตามราชการทั้งหมด {yearHolidaysList.length} วัน</p>
+                    </div>
+                    <div className="year-selector-tabs">
+                      {[2025, 2026, 2027].map(y => (
+                        <button key={y} className={`year-tab ${selectedHolidayYear === y ? 'active' : ''}`} onClick={() => setSelectedHolidayYear(y)}>
+                          พ.ศ. {y + 543} ({y})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="holiday-grid-list">
+                    {yearHolidaysList.map(h => {
+                      const isPast = h.date < todayDateStr;
+                      const isCurrent = h.date === todayDateStr;
+                      return (
+                        <div key={h.date} className={`holiday-row-card ${isCurrent ? 'today' : ''} ${isPast ? 'past' : ''}`}>
+                          <div className="holiday-date-col">
+                            <span className="holiday-date-num">{h.date.split('-')[2]}</span>
+                            <span className="holiday-date-mo">{THAI_MONTH_NAMES[Number(h.date.split('-')[1]) - 1]}</span>
+                          </div>
+                          <div className="holiday-info-col">
+                            <strong>{h.name}</strong>
+                            <small>{h.thaiDate} {h.isSubstitute ? ' · (วันหยุดชดเชย)' : ''}</small>
+                          </div>
+                          <div className="holiday-tag-col">
+                            {isCurrent ? <span className="holiday-tag-status active">🎉 วันนี้</span> : isPast ? <span className="holiday-tag-status past">ผ่านไปแล้ว</span> : <span className="holiday-tag-status future">วันหยุดบริษัท</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
               {/* Daily KPI Dashboard */}
               <div className="att-kpi-grid">
                 <div className="kpi-card">
@@ -1224,6 +1462,34 @@ export default function App() {
                           onChange={e => setLeaveReason(e.target.value)} 
                           placeholder="เช่น พบแพทย์โรงพยาบาล, ติดต่อธุระราชการ, นัดหมายด่วน…" 
                         />
+                      </div>
+
+                      {/* Working Days & Company Holiday Deduction Calculator */}
+                      <div className="leave-calc-box">
+                        <div className="calc-summary">
+                          <span>ระยะเวลาที่เลือก: <strong>{leaveWorkingDaysCalc.totalDays} วัน</strong></span>
+                          <span>•</span>
+                          <span>วันหยุดบริษัท/เสาร์-อาทิตย์: <strong className="text-amber">{leaveWorkingDaysCalc.holidays.length} วัน</strong></span>
+                          <span>•</span>
+                          <span>ใช้วันลาจริง: <strong className="text-green">{leaveWorkingDaysCalc.workingDays} วันทำการ</strong></span>
+                        </div>
+                        {leaveWorkingDaysCalc.holidays.length > 0 && (
+                          <div className="calc-holiday-tags">
+                            <small>วันหยุดราชการของบริษัทที่ไม่นับเป็นวันลา (หยุดตามราชการ):</small>
+                            <div className="holiday-chip-row">
+                              {leaveWorkingDaysCalc.holidays.map(h => (
+                                <span key={h.date} className="holiday-chip" title={h.name}>
+                                  🏖️ {h.date}: {h.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {leaveWorkingDaysCalc.workingDays === 0 && leaveWorkingDaysCalc.totalDays > 0 && (
+                          <div className="calc-zero-alert">
+                            💡 ทุกวันที่เลือกเป็นวันหยุดของบริษัทอยู่แล้ว (หยุดตามราชการ) ไม่เสียโควตาวันลา
+                          </div>
+                        )}
                       </div>
 
                       <button type="submit" className="primary" disabled={busy}>
@@ -1601,21 +1867,34 @@ export default function App() {
             </span>
             <div>
               <strong>Voice Huddle · {rooms.find(r => r.id === huddleRoomId)?.name}</strong>
-              <small>{isDeafened ? 'ปิดเสียงลำโพง' : isMuted ? 'ไมโครโฟนปิดอยู่ (Muted)' : 'กำลังเชื่อมต่อเสียง (เปิดไมค์)'}</small>
+              <small>
+                {isDeafened 
+                  ? 'ปิดเสียงลำโพง' 
+                  : isMuted 
+                    ? 'ไมโครโฟนปิดอยู่ (Muted)' 
+                    : isSpeaking 
+                      ? '🎙️ กำลังส่งเสียงพูด…' 
+                      : (activeVoicePeers.length > 1 ? `เชื่อมต่อ P2P (${activeVoicePeers.length} คน) · พร้อมพูด` : 'เปิดไมค์พร้อมพูด')}
+              </small>
+              {!isMuted && (
+                <div className="mic-level-meter" style={{ marginTop: 3, height: 3, width: 140 }}>
+                  <span className="mic-level-fill" style={{ width: `${micLevel}%` }} />
+                </div>
+              )}
             </div>
           </div>
           <div className="huddle-dock-actions">
             <button 
               type="button"
-              className={`huddle-dock-btn ${!isMuted ? 'active speaking' : 'muted'}`}
-              onPointerDown={startHoldTalk}
-              onPointerUp={stopHoldTalk}
-              onPointerLeave={stopHoldTalk}
-              onClick={toggleMute}
+              className={`huddle-dock-btn ${!isMuted ? (isSpeaking ? 'active speaking' : 'active') : 'muted'}`}
+              onPointerDown={handleMicPointerDown}
+              onPointerUp={handleMicPointerUp}
+              onPointerLeave={handleMicPointerLeave}
+              onClick={handleMicClick}
               title="คลิกเพื่อเปิด/ปิดไมค์ หรือกดค้างเพื่อพูด (Spacebar)"
             >
-              {!isMuted ? <Mic size={16} className="pulse-icon" /> : <MicOff size={16} />}
-              <span>{!isMuted ? 'กำลังพูด…' : 'กดพูด (หรือกดค้าง)'}</span>
+              {!isMuted ? <Mic size={16} className={isSpeaking ? 'pulse-icon' : ''} /> : <MicOff size={16} />}
+              <span>{!isMuted ? (isSpeaking ? 'กำลังพูด…' : 'ไมค์เปิด') : 'กดพูด (หรือกดค้าง)'}</span>
             </button>
             <button 
               className={`huddle-dock-btn ${isDeafened ? 'muted' : ''}`}
@@ -1623,6 +1902,14 @@ export default function App() {
               title={isDeafened ? 'เปิดเสียงลำโพง' : 'ปิดเสียงลำโพง'}
             >
               <Headphones size={16} />
+            </button>
+            <button 
+              className={`huddle-dock-btn ${isLoopback ? 'active' : ''}`}
+              onClick={toggleLoopback}
+              title={isLoopback ? 'ปิดการทดสอบฟังเสียงตัวเอง' : 'เปิดทดสอบฟังเสียงไมค์ตัวเอง (Loopback)'}
+            >
+              <Volume2 size={16} />
+              <span>{isLoopback ? 'ฟังเสียงอยู่' : 'ทดสอบไมค์'}</span>
             </button>
             <button 
               className="huddle-dock-btn meet-link"

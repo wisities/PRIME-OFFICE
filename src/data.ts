@@ -11,6 +11,16 @@ export type AttendanceRecord = {
   status: 'on_time' | 'late';
 };
 
+export type ThaiHoliday = {
+  date: string;
+  name: string;
+  thaiDate: string;
+  thaiYear: number;
+  dayName: string;
+  isSubstitute?: boolean;
+  isCompanyHoliday: boolean;
+};
+
 export type LeaveRequest = {
   id: string;
   user_id: string;
