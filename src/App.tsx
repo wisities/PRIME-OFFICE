@@ -529,6 +529,18 @@ export default function App() {
   const occupants = online.filter(m => m.room === selected);
   const incoming = me.room === 'focus' ? [] : knocks.filter(k => k.state === 'pending' && Date.now() - new Date(k.created_at).getTime() < 300000);
 
+  // Unread/unacknowledged feed posts count (posts not written by me that I have not reacted to yet)
+  const unreadFeedCount = useMemo(() => {
+    return feedPosts.filter(p => {
+      if (p.authorId === me.id) return false;
+      const hasReacted = 
+        (p.reactions.likes || []).includes(me.id) ||
+        (p.reactions.claps || []).includes(me.id) ||
+        (p.reactions.noted || []).includes(me.id);
+      return !hasReacted;
+    }).length;
+  }, [feedPosts, me.id]);
+
   useEffect(() => { setNote(me.note || ''); }, [me.note, demo]);
 
   useEffect(() => {
@@ -1620,7 +1632,7 @@ export default function App() {
         >
           <Users size={19} />
           <span className="dock-btn-label">สมาชิก</span>
-          <span className="dock-badge">{members.length}</span>
+          <span className="dock-badge" style={{ background: '#475569' }}>{members.length}</span>
         </button>
 
         <button 
@@ -1630,7 +1642,7 @@ export default function App() {
         >
           <ClipboardList size={19} />
           <span className="dock-btn-label">ฟีด & งาน</span>
-          {feedPosts.length > 0 && <span className="dock-badge">{feedPosts.length}</span>}
+          {unreadFeedCount > 0 && <span className="dock-badge">{unreadFeedCount}</span>}
         </button>
 
         {me.isAdmin && (
@@ -2089,6 +2101,11 @@ export default function App() {
                 >
                   <span>ทั้งหมด</span>
                   <span style={{ opacity: 0.8 }}>({feedPosts.length})</span>
+                  {unreadFeedCount > 0 && (
+                    <span style={{ background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>
+                      {unreadFeedCount} รอรับทราบ
+                    </span>
+                  )}
                 </button>
                 <button 
                   type="button" 
@@ -2187,6 +2204,12 @@ export default function App() {
                       avatarUrl: post.authorAvatar
                     };
 
+                    const hasReacted = 
+                      (post.reactions.likes || []).includes(me.id) ||
+                      (post.reactions.claps || []).includes(me.id) ||
+                      (post.reactions.noted || []).includes(me.id);
+                    const isMyPost = post.authorId === me.id;
+
                     return (
                       <article className="feed-post-card" key={post.id}>
                         {/* Post Header */}
@@ -2200,6 +2223,33 @@ export default function App() {
                           </div>
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {!isMyPost && !hasReacted && (
+                              <span style={{ 
+                                background: '#ef4444', 
+                                color: '#ffffff', 
+                                fontSize: '10px', 
+                                fontWeight: 700, 
+                                padding: '2px 8px', 
+                                borderRadius: '10px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}>
+                                🔴 ยังไม่ได้รับทราบ
+                              </span>
+                            )}
+                            {!isMyPost && hasReacted && (
+                              <span style={{ 
+                                background: '#ecfdf5', 
+                                color: '#059669', 
+                                fontSize: '10px', 
+                                fontWeight: 600, 
+                                padding: '2px 8px', 
+                                borderRadius: '10px' 
+                              }}>
+                                ✓ รับทราบแล้ว
+                              </span>
+                            )}
                             <span className={`feed-tag-badge ${post.type}`}>
                               {post.type === 'today' ? '💼 งานวันนี้' : '📢 เรื่องประกาศ'}
                             </span>
