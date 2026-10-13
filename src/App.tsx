@@ -4,7 +4,8 @@ import {
   Home, Users, ClipboardList, Megaphone, Settings, ArrowUpRight, DoorOpen, Hand, 
   Coffee, Focus, Video, X, Check, LogOut, Bell, Menu, ShieldCheck, Save, Map, 
   List, Wifi, WifiOff, CalendarCheck, Clock, CheckCircle2, AlertCircle, Plus, Trash2,
-  Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles
+  Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles,
+  Maximize2, Minimize2
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import { 
@@ -80,6 +81,25 @@ export default function App() {
   const [page, setPage] = useState<Page>('office');
   const [selected, setSelected] = useState<RoomId>('hub');
   const [selectedRoomCard, setSelectedRoomCard] = useState<RoomId | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (err) {
+      console.error('Fullscreen request failed:', err);
+    }
+  };
   const [layout, setLayout] = useState('map');
   const [menu, setMenu] = useState(false);
   const [demoState, setDemoState] = useState(() => loadDemo(localStorage));
@@ -847,6 +867,14 @@ export default function App() {
   if (!demo && (!session || !loaded)) {
     return (
       <div className="login-screen">
+        <button 
+          className="icon-button"
+          onClick={toggleFullscreen}
+          style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 50, background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(8px)', borderRadius: '10px' }}
+          title={isFullscreen ? 'ย่อหน้าต่าง (Esc หรือ F11)' : 'ขยายเต็มหน้าจอโน้ตบุ๊ก (Fullscreen / F11)'}
+        >
+          {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
         <div className="login-art">
           <img src="/assets/office.png" alt="ออฟฟิศการ์ตูน PRIME มีห้องทำงาน ห้องประชุม มุมโฟกัส และมุมกาแฟ" />
         </div>
@@ -1067,6 +1095,13 @@ export default function App() {
           >
             <Avatar member={me} small />
             <span className="my-name-tag">{me.name}</span>
+          </button>
+          <button 
+            className="icon-button" 
+            onClick={toggleFullscreen} 
+            title={isFullscreen ? 'ย่อหน้าต่าง (Esc หรือ F11)' : 'ขยายเต็มหน้าจอโน้ตบุ๊ก (Fullscreen / F11)'}
+          >
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
           <button className="icon-button" onClick={logout} disabled={busy} title={demo ? 'เข้าสู่ระบบจริง' : 'ออกจากระบบ'}>
             <LogOut size={16} />

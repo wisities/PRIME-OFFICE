@@ -21,6 +21,7 @@ Production site is automatically built and deployed to Cloudflare Pages (**https
 
 The interface is designed as an edge-to-edge Virtual Office canvas with zero screen clutter:
 - **Edge-to-Edge Canvas (`100vw` x `100vh`)**: The 3D isometric office artwork (`office.png`) forms the main full-screen environment. Live team avatars sit at their respective desks/rooms in real-time.
+  - Laptop landscape windows wider than 900px use proportional cover sizing with dynamic viewport height. The artwork and room pins share the same canvas; excess artwork is cropped at the edges instead of leaving side gutters or stretching the illustration. Opening a room or drawer preserves the full-screen background. Narrow/portrait windows retain the fitted map.
 - **Top Floating Island**: Centered frosted-glass capsule displaying the PRIME company logo, live digital clock, Thai official holiday badge, quick check-in pill, status selector, notification bell, and user profile.
 - **Bottom Floating Dock**: Floating dock inspired by macOS/iPadOS containing:
   - Office view toggle
