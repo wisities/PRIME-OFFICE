@@ -221,8 +221,10 @@ export default function App() {
   const [adminMembers, setAdminMembers] = useState<{ id: string; email: string; name: string; active: boolean; is_admin: boolean }[]>([]);
 
   // Profile Edit State
-  const [demoName, setDemoName] = useState(() => localStorage.getItem('prime-demo-name') || 'คุณ');
-  const [demoAvatar, setDemoAvatar] = useState(() => localStorage.getItem('prime-demo-avatar') || '');
+  const [customName, setCustomName] = useState(() => localStorage.getItem('prime-user-name') || localStorage.getItem('prime-demo-name') || '');
+  const [customAvatar, setCustomAvatar] = useState(() => localStorage.getItem('prime-user-avatar') || localStorage.getItem('prime-demo-avatar') || '');
+  const [demoName, setDemoName] = useState(() => localStorage.getItem('prime-demo-name') || localStorage.getItem('prime-user-name') || 'คุณ');
+  const [demoAvatar, setDemoAvatar] = useState(() => localStorage.getItem('prime-demo-avatar') || localStorage.getItem('prime-user-avatar') || '');
   const [profileOpen, setProfileOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
@@ -441,9 +443,16 @@ export default function App() {
 
   const userAvatar = session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture;
   const currentLive = liveMembers.find(m => m.id === session?.user.id);
+  
+  // Prioritize user's saved custom identity
+  const effectiveName = customName || (demo ? demoName : (currentLive?.name || session?.user?.user_metadata?.full_name || 'คุณ'));
+  const effectiveAvatar = customAvatar || (demo ? demoAvatar : (currentLive?.avatarUrl || userAvatar || ''));
+
   const me: Member = demo
-    ? { id: demoSessionId, name: demoName, role: 'ทีม PRIME', room: demoState.room as RoomId, status: demoState.status as Status, online: true, color: 'blue', note: demoState.note, isAdmin: true, avatarUrl: demoAvatar }
-    : (currentLive ? { ...currentLive, avatarUrl: currentLive.avatarUrl || userAvatar } : { id: session?.user?.id || '', name: session?.user?.user_metadata?.full_name || 'สมาชิก', role: 'ทีม PRIME', room: 'hub', status: 'available', online: false, color: 'blue', avatarUrl: userAvatar });
+    ? { id: demoSessionId, name: effectiveName, role: 'ทีม PRIME', room: demoState.room as RoomId, status: demoState.status as Status, online: true, color: 'blue', note: demoState.note, isAdmin: true, avatarUrl: effectiveAvatar }
+    : (currentLive 
+        ? { ...currentLive, name: effectiveName, avatarUrl: effectiveAvatar } 
+        : { id: session?.user?.id || '', name: effectiveName, role: 'ทีม PRIME', room: 'hub', status: 'available', online: false, color: 'blue', avatarUrl: effectiveAvatar });
 
   // Effective Attendance & Leaves data
   const attendanceList = demo ? demoAttendance : liveAttendance;
@@ -455,12 +464,14 @@ export default function App() {
   }, [leavesList, todayDateStr]);
 
   const members: Member[] = useMemo(() => {
-    if (!demo) return liveMembers;
-    return [me, ...sampleMembers].map(m => {
-      const activeLeave = activeLeavesToday.find(l => l.user_id === m.id);
+    const rawList = demo ? [me, ...sampleMembers] : liveMembers;
+    return rawList.map(m => {
+      const isMe = m.id === me.id || (session?.user?.id && m.id === session.user.id);
+      const targetMember = isMe ? { ...m, name: me.name, avatarUrl: me.avatarUrl } : m;
+      const activeLeave = activeLeavesToday.find(l => l.user_id === targetMember.id);
       if (activeLeave) {
         return {
-          ...m,
+          ...targetMember,
           status: 'away' as Status,
           leaveToday: {
             type: activeLeave.leave_type,
@@ -469,9 +480,9 @@ export default function App() {
           }
         };
       }
-      return m;
+      return targetMember;
     });
-  }, [demo, liveMembers, me, activeLeavesToday]);
+  }, [demo, liveMembers, me, activeLeavesToday, session?.user?.id]);
 
   const room = rooms.find(r => r.id === selected) || initialRooms[0];
   const online = members.filter(m => m.online);
@@ -777,23 +788,51 @@ export default function App() {
     const trimmed = editName.trim();
     if (!trimmed) { setError('กรุณาใส่ชื่อของคุณ'); return; }
     await action(async () => {
-      if (demo) {
-        setDemoName(trimmed);
-        setDemoAvatar(editAvatar);
+      // 1. Immediately update reactive state & local storage for instant UI reflection
+      setCustomName(trimmed);
+      setCustomAvatar(editAvatar);
+      setDemoName(trimmed);
+      setDemoAvatar(editAvatar);
+      try {
+        localStorage.setItem('prime-user-name', trimmed);
+        localStorage.setItem('prime-user-avatar', editAvatar);
+        localStorage.setItem('prime-demo-name', trimmed);
+        localStorage.setItem('prime-demo-avatar', editAvatar);
+      } catch (err) {
+        console.warn('Failed to store profile in localStorage:', err);
+      }
+
+      // 2. If connected to Supabase, sync to backend
+      if (!demo && supabase && session) {
         try {
-          localStorage.setItem('prime-demo-name', trimmed);
-          localStorage.setItem('prime-demo-avatar', editAvatar);
+          await supabase.auth.updateUser({ 
+            data: { 
+              full_name: trimmed, 
+              display_name: trimmed, 
+              avatar_url: editAvatar,
+              custom_avatar: editAvatar 
+            } 
+          });
+        } catch (err) {
+          console.warn('Supabase updateUser err:', err);
+        }
+
+        try {
+          await supabase.from('members').update({ name: trimmed, avatar_url: editAvatar }).eq('user_id', session.user.id);
         } catch {}
-      } else if (supabase) {
-        try { await supabase.auth.updateUser({ data: { full_name: trimmed, avatar_url: editAvatar } }); } catch {}
+
         try {
           const { error } = await supabase.rpc('update_my_identity', { p_name: trimmed, p_avatar: editAvatar });
-          if (error) console.warn(error);
+          if (error) console.warn('RPC update_my_identity err:', error);
         } catch {}
-        await refresh();
+
+        try {
+          await refresh();
+        } catch {}
       }
+
       setProfileOpen(false);
-      notify('บันทึกชื่อและรูปโปรไฟล์แล้ว');
+      notify('บันทึกชื่อและรูปโปรไฟล์เรียบร้อย ✨');
     });
   }
 
@@ -1211,7 +1250,7 @@ export default function App() {
                       title={m.room === 'focus' ? `${m.name}: กำลังโฟกัสงานใน Focus Zone (กรุณาโทรเบอร์มือถือหากมีงานด่วน)` : `${m.name}: ${statuses[m.status]}`}
                     >
                       <Avatar member={m} small isSpeaking={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking)} />
-                      <span>{m.id === me.id ? 'คุณ' : m.name}</span>
+                      <span>{m.id === me.id ? `${m.name} (คุณ)` : m.name}</span>
                     </button>
                   ))}
                   {people.length > 5 && <span className="more-people">+{people.length - 5}</span>}
