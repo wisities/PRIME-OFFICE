@@ -79,6 +79,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(!configured);
   const [page, setPage] = useState<Page>('office');
   const [selected, setSelected] = useState<RoomId>('hub');
+  const [selectedRoomCard, setSelectedRoomCard] = useState<RoomId | null>(null);
   const [layout, setLayout] = useState('map');
   const [menu, setMenu] = useState(false);
   const [demoState, setDemoState] = useState(() => loadDemo(localStorage));
@@ -551,6 +552,21 @@ export default function App() {
     };
   }, [inHuddle, startHoldTalk, stopHoldTalk]);
 
+  // ESC key to close any drawer or popover
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (page !== 'office') setPage('office');
+        setSelectedRoomCard(null);
+        if (profileOpen) setProfileOpen(false);
+        if (noticeOpen) setNoticeOpen(false);
+        if (knockTarget) setKnockTarget(null);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [page, profileOpen, noticeOpen, knockTarget]);
+
   // Floating Pop-up Window for Google Meet (Opens on top of screen, not a new full tab)
   const launchGoogleMeetWindow = useCallback((url?: string) => {
     const meetUrl = url && validMeetUrl(url) ? url : 'https://meet.google.com/new';
@@ -860,369 +876,331 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      {/* Sidebar Navigation */}
-      <aside className={`sidebar ${menu ? 'open' : ''}`}>
-        <a className="brand" href="#" onClick={e => { e.preventDefault(); setPage('office'); }}>
-          <span className="brand-mark">P</span>
-          <span>PRIME<small>VIRTUAL OFFICE</small></span>
-        </a>
-        <p className="nav-caption">WORKSPACE</p>
-        <nav>
-          {nav.filter(n => n.id !== 'admin' || me.isAdmin).map(n => (
-            <button key={n.id} className={page === n.id ? 'active' : ''} onClick={() => { setPage(n.id); setMenu(false); }}>
-              <n.icon size={19} />
-              {n.label}
-              {n.id === 'team' && <span className="nav-count">{members.length}</span>}
-              {n.id === 'attendance' && onLeaveCount > 0 && <span className="nav-count leave-cnt">{onLeaveCount} ลา</span>}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="workspace-note">
-            <span className="tiny-dot" />พื้นที่ของทีมเรา
-            <small>ไพร์มดิจิทัลคอนซัลแทนท์ จำกัด</small>
-          </div>
-          <button className="logout" onClick={logout} disabled={busy}>
-            <LogOut size={17} />{demo ? 'เข้าสู่ระบบจริง' : 'ออกจากระบบ'}
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="app-main">
-        {/* Topbar Header */}
-        <header className="topbar">
-          <div className="breadcrumb">
-            <button className="icon-button mobile-menu" aria-label="เปิดเมนู" onClick={() => setMenu(!menu)}>
-              <Menu size={21} />
-            </button>
-            <span>Workspace</span>
-            <span>/</span>
-            <strong>{nav.find(n => n.id === page)?.label}</strong>
-          </div>
-
-          <div className="topbar-right">
-            {/* Thai Public Holiday Tag in Topbar */}
-            {todayHoliday.isCompanyHoliday && (
-              <div 
-                className={`topbar-holiday-tag ${todayHoliday.isPublicHoliday ? 'public-holiday' : 'weekend'}`} 
-                title={`${todayHoliday.statusLabel} (หยุดตามราชการ)`}
-                onClick={() => { setPage('attendance'); setShowHolidayCalendar(true); }}
-                style={{ cursor: 'pointer' }}
-              >
-                <span className="holiday-dot" />
-                <span>{todayHoliday.isPublicHoliday ? `🏖️ วันหยุดบริษัท: ${todayHoliday.name}` : `🛋️ ${todayHoliday.name}`}</span>
-              </div>
-            )}
-
-            {/* Quick Check-in Button in Topbar */}
-            {todayMyAttendance ? (
-              !todayMyAttendance.check_out_at ? (
-                <button 
-                  className="topbar-checkin-pill active" 
-                  onClick={handleCheckOut} 
-                  disabled={busy}
-                  title="คลิกเพื่อเช็คเอาท์เลิกงาน"
+    <div className="immersive-app-container">
+      {/* 1. IMMERSIVE FULL-SCREEN OFFICE CANVAS */}
+      <div className="immersive-map-stage">
+        <div className={`immersive-map-viewport ${page !== 'office' || selectedRoomCard ? 'drawer-open' : ''}`}>
+          <img src="/assets/office.png" alt="PRIME Virtual Office Campus" />
+          {rooms.map(r => {
+            const people = online.filter(m => m.room === r.id);
+            const isMyRoom = me.room === r.id;
+            const isSelected = selected === r.id;
+            return (
+              <div className={`immersive-map-room ${r.id}`} key={r.id}>
+                <button
+                  type="button"
+                  className={`room-pin-pill ${isMyRoom ? 'my-current-room' : ''} ${isSelected ? 'selected' : ''}`}
+                  onClick={() => {
+                    setSelected(r.id);
+                    setSelectedRoomCard(selectedRoomCard === r.id ? null : r.id);
+                  }}
+                  title={`คลิกเพื่อดูห้อง ${r.name} (${people.length} คน)`}
                 >
                   <span className="tiny-dot" />
-                  <span className="pill-time">เข้า {formatThaiTime(todayMyAttendance.check_in_at)}</span>
-                  <span className={`pill-badge ${todayMyAttendance.status}`}>
-                    {todayMyAttendance.status === 'on_time' ? 'ตรงเวลา' : 'สาย'}
-                  </span>
-                  <span className="pill-action">· เช็คเอาท์</span>
+                  <span>{r.name}</span>
+                  <span className="room-count-badge">{people.length}</span>
                 </button>
-              ) : (
-                <div className="topbar-checkin-pill completed" title={`เข้า ${formatThaiTime(todayMyAttendance.check_in_at)} - ออก ${formatThaiTime(todayMyAttendance.check_out_at)}`}>
-                  <CheckCircle2 size={13} color="#40947a" />
-                  <span>ออกงานแล้ว {formatThaiTime(todayMyAttendance.check_out_at)}</span>
-                </div>
-              )
-            ) : (
-              <button 
-                className={`topbar-checkin-pill cta ${todayHoliday.isCompanyHoliday ? 'holiday-mode' : ''}`} 
-                onClick={handleCheckIn} 
-                disabled={busy}
-                title={todayHoliday.isPublicHoliday 
-                  ? `วันนี้เป็นวันหยุดราชการ: ${todayHoliday.name} (ไม่ต้องเช็คอิน หรือกดเพื่อลงเวลาทำงานพิเศษ)` 
-                  : "คลิกเพื่อเช็คอินเข้างานประจำวัน (เวลาเริ่มงาน 08:00 น.)"}
-              >
-                <Clock size={14} />
-                <span>{todayHoliday.isPublicHoliday ? 'ทำงานวันหยุดพิเศษ' : 'เช็คอินเข้างาน'}</span>
-                <span className="pill-target">{todayHoliday.isPublicHoliday ? 'วันหยุด' : '08:00'}</span>
-              </button>
-            )}
-
-            <span className="connection">
-              {demo ? (
-                <><span className="tiny-dot amber" />สาธิต</>
-              ) : connected ? (
-                <><Wifi size={15} />เชื่อมต่อแล้ว</>
-              ) : (
-                <><WifiOff size={15} />กำลังเชื่อมต่อใหม่</>
-              )}
-            </span>
-
-            <button className="icon-button bell" aria-label={`การแจ้งเตือน ${incoming.length} รายการ`} onClick={() => setNoticeOpen(true)}>
-              <Bell size={20} />
-              {incoming.length > 0 && <b>{incoming.length}</b>}
-            </button>
-
-            <button 
-              className="profile-badge-btn" 
-              aria-label="แก้ไขโปรไฟล์ของคุณ" 
-              title="คลิกเพื่อแก้ไขชื่อและรูปประจำตัว" 
-              onClick={() => { setEditName(me.name); setEditAvatar(me.avatarUrl || ''); setProfileOpen(true); }}
-            >
-              <Avatar member={me} small />
-              <span className="my-name-tag">{me.name}</span>
-            </button>
-          </div>
-        </header>
-
-        <main className="content">
-          {demo && (
-            <div className="demo-banner">
-              <span><span className="tiny-dot amber" />โหมดสาธิต · สมาชิก การเช็คอิน และการลาเป็นตัวอย่าง บันทึกเฉพาะเครื่องนี้</span>
-              <button onClick={() => { setDemo(false); setError(''); }}>เชื่อมต่อทีมจริง <ArrowUpRight size={14} /></button>
-            </div>
-          )}
-          {errorBanner}
-
-          <div className="page-heading">
-            <div>
-              <p className="eyebrow">PRIME VIRTUAL OFFICE · 08:00 - 17:00</p>
-              <h1>
-                {page === 'office' ? 'ออฟฟิศของเรา' : nav.find(n => n.id === page)?.label}
-                <span className="heading-dot">.</span>
-              </h1>
-              <p>
-                {page === 'office' ? 'วันนี้ก็ทำงานไปด้วยกัน เลือกห้องแล้วแวะทักทายทีมได้เลย' :
-                 page === 'attendance' ? 'ระบบลงเวลาทำงาน เช็คอินเข้า-ออก และยื่นลากิจ ลาป่วย (อนุมัติทันที)' :
-                 'พื้นที่สำหรับทีมไพร์มดิจิทัลคอนซัลแทนท์'}
-              </p>
-            </div>
-            <div className="my-status">
-              <label htmlFor="my-status">สถานะของคุณ</label>
-              <select id="my-status" value={me.status} disabled={busy} onChange={e => void updateProfile({ status: e.target.value as Status })}>
-                {Object.entries(statuses).map(([v, l]) => <option value={v} key={v}>{l}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* PAGE: Office Map */}
-          {page === 'office' && (
-            <>
-              <div className="office-toolbar">
-                <div className="online-summary">
-                  <span className="tiny-dot" />
-                  <strong>{online.length}</strong>
-                  <span>ออนไลน์ จาก {members.length} คน</span>
-                  {onLeaveCount > 0 && <span className="leave-pill-tag">· ลางาน {onLeaveCount} คน</span>}
-                  <span className="separator" />
-                  <span>คุณอยู่ที่ <b>{rooms.find(r => r.id === me.room)?.name}</b></span>
-                </div>
-                <div className="segmented">
-                  <button aria-pressed={layout === 'map'} onClick={() => setLayout('map')}><Map size={16} />แผนผัง</button>
-                  <button aria-pressed={layout === 'list'} onClick={() => setLayout('list')}><List size={16} />ห้องทั้งหมด</button>
+                <div className="map-avatars">
+                  {people.slice(0, 5).map(m => (
+                    <button
+                      type="button"
+                      key={m.id}
+                      className="map-person"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelected(r.id);
+                        if (m.id !== me.id) setKnockTarget(m);
+                      }}
+                      aria-label={`${m.name} ${statuses[m.status]}`}
+                      title={`${m.name}: ${statuses[m.status]}`}
+                    >
+                      <Avatar member={m} small isSpeaking={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking)} />
+                      <span>{m.id === me.id ? 'คุณ' : m.name}</span>
+                    </button>
+                  ))}
+                  {people.length > 5 && <span className="more-people">+{people.length - 5}</span>}
                 </div>
               </div>
+            );
+          })}
+        </div>
+      </div>
 
-              <div className="office-grid">
-                <section className="office-stage" aria-label="แผนผังออฟฟิศ">
-                  {layout === 'map' ? (
-                    <div className="map-scene">
-                      <img src="/assets/office.png" alt="ฉากออฟฟิศการ์ตูนสี่ห้อง" />
-                      {rooms.map(r => {
-                        const people = online.filter(m => m.room === r.id);
-                        return (
-                          <div className={`map-room ${r.id}`} key={r.id}>
-                            <button className={`room-pin ${selected === r.id ? 'selected' : ''}`} onClick={() => setSelected(r.id)} aria-pressed={selected === r.id}>
-                              <span className="tiny-dot" />{r.name}
-                              <span className="pin-count">{people.length}</span>
-                            </button>
-                            <div className="map-avatars">
-                              {people.slice(0, 4).map(m => (
-                                <button key={m.id} className="map-person" onClick={() => { setSelected(r.id); if (m.id !== me.id) setKnockTarget(m); }} aria-label={`${m.name} ${statuses[m.status]}`}>
-                                  <Avatar member={m} small isSpeaking={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking)} />
-                                  <span>{m.id === me.id ? 'คุณ' : m.name}</span>
-                                </button>
-                              ))}
-                              {people.length > 4 && <span className="more-people">+{people.length - 4}</span>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <span className="map-caption">เลือกป้ายห้องเพื่อดูรายละเอียด</span>
-                    </div>
+      {/* 2. FLOATING ROOM CARD (When clicking a room pin on canvas) */}
+      {selectedRoomCard && (
+        <div 
+          className="floating-room-popover" 
+          style={{ 
+            bottom: '86px', 
+            right: page !== 'office' ? 'calc(min(720px, 94vw) + 18px)' : '24px' 
+          }}
+        >
+          {(() => {
+            const activeR = rooms.find(r => r.id === selectedRoomCard) || rooms[0];
+            const peopleInRoom = online.filter(m => m.room === activeR.id);
+            const isMyRoom = me.room === activeR.id;
+            return (
+              <>
+                <div className="room-popover-header">
+                  <strong>{activeR.name}</strong>
+                  <button className="icon-button" onClick={() => setSelectedRoomCard(null)} title="ปิด"><X size={15} /></button>
+                </div>
+                <p className="room-popover-desc">{activeR.description}</p>
+                <div className="section-label">
+                  <span>สมาชิกในห้อง</span>
+                  <small>{peopleInRoom.length} คน</small>
+                </div>
+                <div className="room-popover-occupants">
+                  {peopleInRoom.length === 0 ? (
+                    <small style={{ color: '#94a3b8' }}>ห้องว่าง แวะเข้ามาเป็นคนแรก</small>
                   ) : (
-                    <div className="room-list">
-                      {rooms.map(r => (
-                        <button key={r.id} onClick={() => setSelected(r.id)} className={`room-card ${selected === r.id ? 'selected' : ''}`}>
-                          <span className={'room-illustration ' + r.id}>
-                            {r.id === 'coffee' ? <Coffee /> : r.id === 'focus' ? <Focus /> : r.id === 'project' ? <Video /> : <Home />}
-                          </span>
-                          <strong>{r.name}</strong>
-                          <span>{r.thai}</span>
-                          <small>{online.filter(m => m.room === r.id).length} คนในห้อง</small>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="map-legend">
-                    <span><i className="tiny-dot" />พร้อมคุย</span>
-                    <span><i className="tiny-dot amber" />กำลังโฟกัส</span>
-                    <span><i className="tiny-dot gray" />ไม่อยู่</span>
-                    <span className="muted">ไมค์และกล้องเปิดในวิดีโอคอลเท่านั้น</span>
-                  </div>
-                </section>
-
-                <aside className="room-detail">
-                  <div className={'room-detail-icon ' + room.id}>
-                    {room.id === 'coffee' ? <Coffee size={24} /> : room.id === 'focus' ? <Focus size={24} /> : room.id === 'project' ? <Video size={24} /> : <Home size={24} />}
-                  </div>
-                  <p className="eyebrow">YOUR SPACE TO CONNECT</p>
-                  <h2>{room.name}</h2>
-                  <p>{room.description}</p>
-                  <div className="detail-divider" />
-                  <div className="section-label">สมาชิกในห้อง <span>{occupants.length} คน</span></div>
-                  <div className="occupants">
-                    {occupants.length === 0 ? (
-                      <p className="empty-inline">ห้องว่าง แวะเข้ามาเป็นคนแรกได้เลย</p>
-                    ) : occupants.map(m => (
-                      <div className="person-row" key={m.id}>
+                    peopleInRoom.map(m => (
+                      <div className="room-popover-person" key={m.id}>
                         <Avatar member={m} small isSpeaking={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking)} />
-                        <div>
-                          <strong>{m.name}{m.id === me.id ? ' (คุณ)' : ''}</strong>
-                          <small>{m.leaveToday ? `${m.leaveToday.emoji} ${m.leaveToday.label}` : statuses[m.status]}</small>
-                        </div>
-                        {inHuddle && huddleRoomId === room.id && (activeVoicePeers.includes(m.id) || m.id === me.id) && (
-                          <span className="huddle-member-chip" title={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking) ? 'กำลังพูด' : 'อยู่ในสายเสียง'}>
-                            <Mic size={10} color={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking) ? '#158659' : '#31785a'} />
-                            {speakingMembers.has(m.id) || (m.id === me.id && isSpeaking) ? 'พูดอยู่' : 'ในสาย'}
-                          </span>
-                        )}
-                        {m.id !== me.id && (
-                          <button className="icon-button" aria-label={'เคาะประตูคุยกับ ' + m.name} onClick={() => setKnockTarget(m)}>
-                            <Hand size={17} />
-                          </button>
-                        )}
+                        <span>{m.name}{m.id === me.id ? ' (คุณ)' : ''}</span>
                       </div>
-                    ))}
-                  </div>
-                  <button className="primary" disabled={busy || me.room === room.id} onClick={() => void updateProfile({ room_id: room.id })}>
-                    {me.room === room.id ? <Check size={18} /> : <DoorOpen size={18} />} {me.room === room.id ? 'คุณอยู่ในห้องนี้' : 'เข้าห้องนี้'}
-                  </button>
-
-                  {/* Rule 1: Must enter room first before Voice Huddle */}
-                  {me.room !== room.id ? (
-                    <div className="huddle-locked-notice">
-                      <MicOff size={15} />
-                      <span>กด <strong>เข้าห้องนี้</strong> ก่อน ถึงจะเปิดไมค์คุยกับเพื่อนได้</span>
-                    </div>
-                  ) : (
-                    /* Rule 2: Push-to-talk or click-to-talk once inside the room */
-                    inHuddle && huddleRoomId === room.id ? (
-                      <div className="talk-console">
-                        <button 
-                          type="button"
-                          className={`talk-btn-large ${!isMuted ? 'speaking' : ''}`}
-                          onPointerDown={handleMicPointerDown}
-                          onPointerUp={handleMicPointerUp}
-                          onPointerLeave={handleMicPointerLeave}
-                          onClick={handleMicClick}
-                          title="คลิกเพื่อเปิด/ปิดไมค์ หรือกดค้างเพื่อพูด (Spacebar)"
-                        >
-                          {!isMuted ? <Mic size={24} className="pulse-icon" /> : <MicOff size={24} />}
-                          <div className="talk-btn-text">
-                            <strong>{!isMuted ? (isSpeaking ? '🎙️ กำลังส่งเสียงพูด…' : 'เปิดไมค์อยู่ (พูดได้เลย)') : 'กดเพื่อเปิดไมค์ (หรือกดค้าง)'}</strong>
-                            <small>{!isMuted ? 'คลิก 1 ครั้งเพื่อปิดไมค์' : 'คลิก 1 ครั้งเปิดไมค์ / กดค้างพูด / Spacebar'}</small>
-                          </div>
-                        </button>
-                        {!isMuted && (
-                          <div className="mic-level-meter" title={`ระดับสัญญาณไมค์: ${micLevel}%`}>
-                            <span className="mic-level-fill" style={{ width: `${micLevel}%` }} />
-                          </div>
-                        )}
-                        <div className="talk-quick-row">
-                          <button type="button" className={`talk-sub-btn ${isMuted ? 'muted' : 'active'}`} onClick={toggleMute}>
-                            {isMuted ? <MicOff size={14}/> : <Mic size={14}/>} {isMuted ? 'ไมค์ปิด' : 'ไมค์เปิด'}
-                          </button>
-                          <button type="button" className={`talk-sub-btn ${isDeafened ? 'muted' : ''}`} onClick={toggleDeafen}>
-                            <Headphones size={14}/> {isDeafened ? 'หูฟังปิด' : 'หูฟังเปิด'}
-                          </button>
-                          <button type="button" className={`talk-sub-btn ${isLoopback ? 'active' : ''}`} onClick={toggleLoopback} title="กดเพื่อทดสอบฟังเสียงสะท้อนจากไมค์ตัวเอง">
-                            <Volume2 size={14}/> {isLoopback ? 'ฟังเสียงอยู่' : 'ทดสอบไมค์'}
-                          </button>
-                        </div>
-                        <button type="button" className="talk-sub-btn hangup" style={{ width: '100%', justifyContent: 'center' }} onClick={leaveHuddle}>
-                          <PhoneOff size={14}/> ออกจาก Voice Huddle
-                        </button>
-                        {activeVoicePeers.length <= 1 ? (
-                          <div className="talk-hint-box">
-                            <small>💡 <strong>คุณอยู่ในห้องคนเดียว:</strong> ระบบจะไม่สะท้อนเสียงไมค์เข้าลำโพงเพื่อกันเสียงหอน หากต้องการทดสอบว่าไมค์ดังไหม ให้กดปุ่ม <b>"ทดสอบไมค์"</b> ด้านบน หรือเปิดอีกแท็บ/หน้าต่างเพื่อลองคุยข้ามแท็บ</small>
-                            <button 
-                              type="button" 
-                              className={`talk-sub-btn ${isLoopback ? 'active' : ''}`} 
-                              onClick={toggleLoopback}
-                              style={{ width: '100%', marginTop: '8px', justifyContent: 'center' }}
-                            >
-                              <Volume2 size={14} /> {isLoopback ? '🔊 กำลังฟังเสียงไมค์ตัวเอง (กดเพื่อปิด)' : '🔊 กดตรงนี้เพื่อทดสอบฟังเสียงไมค์ตัวเองทันที'}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="talk-peers-info">
-                            <small>🟢 <strong>เชื่อมต่อเสียงแล้ว ({activeVoicePeers.length} คน):</strong> สมาชิกในห้องได้ยินเสียงกันทันที</small>
-                          </div>
-                        )}
-                        {speakingMembers.size > 0 && (
-                          <div className="active-speakers-tag">
-                            <span className="sound-dot" />
-                            <span>{members.filter(m => speakingMembers.has(m.id)).map(m => m.name).join(', ')} กำลังพูด…</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <button className="primary huddle-join-btn" onClick={() => joinHuddle(room.id)}>
-                        <Mic size={17} /><span>🎙️ เปิดไมค์ Voice Huddle (ในห้องนี้)</span>
-                      </button>
-                    )
+                    ))
                   )}
-
-                  {/* Rule 3: Google Meet popup overlay (no new full tab) */}
-                  <button className="secondary meet-btn" onClick={() => openGoogleMeet(room)}>
-                    <Video size={17} /><span>เปิด Google Meet (Popup ทับหน้าเว็บ)</span><ArrowUpRight size={13} />
+                </div>
+                <div className="room-popover-actions">
+                  {!isMyRoom ? (
+                    <button className="primary" onClick={() => void updateProfile({ room_id: activeR.id })}>
+                      <DoorOpen size={16} /> ย้ายเข้าห้องนี้
+                    </button>
+                  ) : (
+                    <>
+                      {inHuddle && huddleRoomId === activeR.id ? (
+                        <button className="secondary" onClick={leaveHuddle}>
+                          <PhoneOff size={15} color="#ef4444" /> วางสายเสียง
+                        </button>
+                      ) : (
+                        <button className="primary" onClick={() => joinHuddle(activeR.id)}>
+                          <Mic size={15} /> เข้าสายเสียงห้องนี้
+                        </button>
+                      )}
+                    </>
+                  )}
+                  <button className="secondary" onClick={() => openGoogleMeet(activeR)}>
+                    <Video size={15} /> เปิด Google Meet Popup
                   </button>
-                  <small className="room-hint">
-                    {room.meet_url ? 'มีลิงก์ Google Meet ประจำห้องแล้ว' : 'เปิด Google Meet แบบ Pop-up ทับหน้าเว็บ ไม่เปิดแท็บใหม่'}
-                  </small>
-                </aside>
-              </div>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
 
-              <div className="bottom-grid">
-                <section className="note-card">
-                  <div className="section-label">
-                    <span><ClipboardList size={18} />วันนี้โฟกัสอะไร?</span>
-                    <small>แชร์ให้ทีมรู้</small>
-                  </div>
-                  <form onSubmit={e => { e.preventDefault(); void updateProfile({ daily_note: note }); }}>
-                    <input aria-label="งานวันนี้" value={note} maxLength={240} onChange={e => setNote(e.target.value)} placeholder="เช่น ออกแบบหน้าเว็บไซต์ให้ลูกค้า…" />
-                    <button className="text-button" disabled={busy}><Save size={16} />บันทึก</button>
-                  </form>
-                </section>
-                <section className="notice-card">
-                  <span className="announcement-icon"><Megaphone size={22} /></span>
-                  <div>
-                    <small>จากบอร์ดประกาศ</small>
-                    <strong>{notices[0]?.title || 'ยังไม่มีประกาศใหม่'}</strong>
-                    <button className="text-button" onClick={() => setPage('announcements')}>ดูประกาศทั้งหมด <ArrowUpRight size={14} /></button>
-                  </div>
-                </section>
-              </div>
-            </>
-          )}
+      {/* 3. FLOATING TOP ISLAND */}
+      <header className="floating-top-island">
+        <div className="island-brand" onClick={() => { setPage('office'); setSelectedRoomCard(null); }}>
+          <span className="island-brand-mark">P</span>
+          <div className="island-brand-text">
+            <strong>PRIME</strong>
+            <small>VIRTUAL OFFICE</small>
+          </div>
+        </div>
 
-          {/* PAGE: Attendance & Leave Management */}
+        <div className="island-divider" />
+
+        <div className="island-clock">
+          <Clock size={13} color="#475569" />
+          <span>{nowTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</span>
+        </div>
+
+        {todayHoliday.isCompanyHoliday ? (
+          <button 
+            type="button"
+            className={`island-holiday-tag ${todayHoliday.isPublicHoliday ? 'public' : 'weekend'}`}
+            onClick={() => { setPage('attendance'); setShowHolidayCalendar(true); }}
+            title={`${todayHoliday.statusLabel} (หยุดตามราชการ) คลิกเพื่อดูปฏิทินทั้งปี`}
+          >
+            <span>{todayHoliday.isPublicHoliday ? `🏖️ วันหยุด: ${todayHoliday.name}` : `🛋️ ${todayHoliday.name}`}</span>
+          </button>
+        ) : (
+          <button 
+            type="button"
+            className="island-holiday-tag weekend"
+            onClick={() => { setPage('attendance'); setShowHolidayCalendar(true); }}
+            title="ตรวจเช็ควันหยุดราชการประจำปี"
+          >
+            <span>🇹🇭 ตรวจวันหยุดราชการ</span>
+          </button>
+        )}
+
+        <div className="island-divider" />
+
+        {/* Quick Check-in pill */}
+        {todayMyAttendance ? (
+          !todayMyAttendance.check_out_at ? (
+            <button className="topbar-checkin-pill active" onClick={handleCheckOut} disabled={busy} title="คลิกเพื่อเช็คเอาท์เลิกงาน">
+              <span className="tiny-dot" />
+              <span>เข้า {formatThaiTime(todayMyAttendance.check_in_at)} · เช็คเอาท์</span>
+            </button>
+          ) : (
+            <div className="topbar-checkin-pill completed">
+              <CheckCircle2 size={13} color="#40947a" />
+              <span>ออกงานแล้ว {formatThaiTime(todayMyAttendance.check_out_at)}</span>
+            </div>
+          )
+        ) : (
+          <button className={`topbar-checkin-pill cta ${todayHoliday.isCompanyHoliday ? 'holiday-mode' : ''}`} onClick={handleCheckIn} disabled={busy} title="คลิกเพื่อเช็คอิน">
+            <Clock size={13} />
+            <span>{todayHoliday.isPublicHoliday ? 'ทำงานวันหยุดพิเศษ' : 'เช็คอินเข้างาน'}</span>
+          </button>
+        )}
+
+        <div className="island-divider" />
+
+        <select className="island-status-select" value={me.status} disabled={busy} onChange={e => void updateProfile({ status: e.target.value as Status })}>
+          {Object.entries(statuses).map(([v, l]) => <option value={v} key={v}>{l}</option>)}
+        </select>
+
+        <div className="island-actions">
+          <button className="icon-button bell" onClick={() => setNoticeOpen(true)} title={`การแจ้งเตือน ${incoming.length} รายการ`}>
+            <Bell size={17} />
+            {incoming.length > 0 && <b>{incoming.length}</b>}
+          </button>
+          <button 
+            className="profile-badge-btn" 
+            onClick={() => { setEditName(me.name); setEditAvatar(me.avatarUrl || ''); setProfileOpen(true); }}
+            title="แก้ไขโปรไฟล์ของคุณ"
+          >
+            <Avatar member={me} small />
+            <span className="my-name-tag">{me.name}</span>
+          </button>
+          <button className="icon-button" onClick={logout} disabled={busy} title={demo ? 'เข้าสู่ระบบจริง' : 'ออกจากระบบ'}>
+            <LogOut size={16} />
+          </button>
+        </div>
+      </header>
+
+      {/* Floating Demo / Error Banners */}
+      {demo && (
+        <div className="demo-banner" style={{ position: 'fixed', top: '68px', left: '50%', transform: 'translateX(-50%)', zIndex: 115, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>
+          <span><span className="tiny-dot amber" />โหมดสาธิต · สมาชิก การเช็คอิน และการลาเป็นตัวอย่าง บันทึกเฉพาะเครื่องนี้</span>
+          <button onClick={() => { setDemo(false); setError(''); }}>เชื่อมต่อทีมจริง <ArrowUpRight size={14} /></button>
+        </div>
+      )}
+      {errorBanner}
+
+      {/* 4. BOTTOM FLOATING DOCK */}
+      <nav className="floating-bottom-dock">
+        <button 
+          className={`dock-btn ${page === 'office' && !selectedRoomCard ? 'active' : ''}`} 
+          onClick={() => { setPage('office'); setSelectedRoomCard(null); }} 
+          title="ออฟฟิศของเรา (ฉากเต็มจอ)"
+        >
+          <Home size={19} />
+          <span className="dock-btn-label">ออฟฟิศ</span>
+        </button>
+
+        <div className="dock-divider" />
+
+        {/* Voice Huddle Controller in Dock */}
+        {inHuddle && huddleRoomId ? (
+          <div className="dock-voice-module">
+            <button
+              className={`dock-voice-btn ${isMuted ? 'muted' : ''} ${isSpeaking ? 'speaking' : ''}`}
+              onClick={handleMicClick}
+              onPointerDown={handleMicPointerDown}
+              onPointerUp={handleMicPointerUp}
+              title={isMuted ? "ไมค์ปิดอยู่ (กดเพื่อเปิด หรือกด Spacebar ค้างเพื่อพูด)" : "ไมค์เปิดอยู่ (กำลังส่งเสียง)"}
+            >
+              {isMuted ? <MicOff size={15} /> : <Mic size={15} />}
+              <span>{isSpeaking ? 'กำลังพูด…' : isMuted ? 'ไมค์ปิด (Spacebar)' : 'ไมค์เปิด'}</span>
+            </button>
+            <button className="dock-btn" style={{ minWidth: '36px', height: '36px' }} onClick={() => toggleMute()} title="สลับไมค์">
+              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+            <button className="dock-btn" style={{ minWidth: '36px', height: '36px' }} onClick={leaveHuddle} title="วางสายเสียง">
+              <PhoneOff size={16} color="#ef4444" />
+            </button>
+          </div>
+        ) : (
+          <button className="dock-btn" onClick={() => joinHuddle(me.room)} title={`เปิดไมค์คุยในห้อง ${rooms.find(r => r.id === me.room)?.name}`}>
+            <Radio size={19} color="#10b981" />
+            <span className="dock-btn-label">เปิดไมค์</span>
+          </button>
+        )}
+
+        {/* Google Meet Popup Quick Launcher */}
+        <button className="dock-meet-btn" onClick={() => openGoogleMeet(rooms.find(r => r.id === me.room) || rooms[0])} title="เปิด Google Meet แบบ Pop-up ทับหน้าจอ">
+          <Video size={16} />
+          <span>Meet Popup</span>
+        </button>
+
+        <div className="dock-divider" />
+
+        {/* Navigation to Drawers */}
+        <button 
+          className={`dock-btn ${page === 'attendance' ? 'active' : ''}`} 
+          onClick={() => { setPage('attendance'); setSelectedRoomCard(null); }} 
+          title="ระบบลงเวลาทำงาน & วันหยุดราชการ & ลางาน"
+        >
+          <CalendarCheck size={19} />
+          <span className="dock-btn-label">ลงเวลา & ลา</span>
+          {onLeaveCount > 0 && <span className="dock-badge leave-badge">{onLeaveCount}</span>}
+        </button>
+
+        <button 
+          className={`dock-btn ${page === 'team' ? 'active' : ''}`} 
+          onClick={() => { setPage('team'); setSelectedRoomCard(null); }} 
+          title="สมาชิกทีมทั้งหมด"
+        >
+          <Users size={19} />
+          <span className="dock-btn-label">สมาชิก</span>
+          <span className="dock-badge">{members.length}</span>
+        </button>
+
+        <button 
+          className={`dock-btn ${page === 'today' ? 'active' : ''}`} 
+          onClick={() => { setPage('today'); setSelectedRoomCard(null); }} 
+          title="สรุปงานประจำวันของทีม"
+        >
+          <ClipboardList size={19} />
+          <span className="dock-btn-label">งานวันนี้</span>
+        </button>
+
+        <button 
+          className={`dock-btn ${page === 'announcements' ? 'active' : ''}`} 
+          onClick={() => { setPage('announcements'); setSelectedRoomCard(null); }} 
+          title="บอร์ดประกาศบริษัท"
+        >
+          <Megaphone size={19} />
+          <span className="dock-btn-label">ประกาศ</span>
+          {notices.length > 0 && <span className="dock-badge">{notices.length}</span>}
+        </button>
+
+        {me.isAdmin && (
+          <button 
+            className={`dock-btn ${page === 'admin' ? 'active' : ''}`} 
+            onClick={() => { setPage('admin'); setSelectedRoomCard(null); }} 
+            title="ผู้ดูแลระบบ"
+          >
+            <Settings size={19} />
+            <span className="dock-btn-label">แอดมิน</span>
+          </button>
+        )}
+      </nav>
+
+      {/* 5. SLIDE-OVER GLASS DRAWER (When page !== 'office') */}
+      {page !== 'office' && (
+        <>
+          <div className="drawer-backdrop" onClick={() => setPage('office')} />
+          <aside className="slide-over-drawer">
+            <div className="drawer-header">
+              <div className="drawer-header-title">
+                <h2>{nav.find(n => n.id === page)?.label}</h2>
+                <span>PRIME VIRTUAL OFFICE</span>
+              </div>
+              <button className="drawer-close-btn" onClick={() => setPage('office')} title="ปิดหน้าต่าง (หรือกด Esc)">
+                <X size={16} />
+                <span>ปิด (Esc)</span>
+              </button>
+            </div>
+            <div className="drawer-body">
+              {/* PAGE: Attendance & Leave Management */}
+
           {page === 'attendance' && (
             <div className="attendance-page">
               {/* Company Holiday Confirmation Banner */}
@@ -1763,12 +1741,14 @@ export default function App() {
             </div>
           )}
 
-          <footer className="page-footer">
-            <span>PRIME DIGITAL CONSULTANT</span>
-            <span>พื้นที่ทำงานของเรา · เวอร์ชัน 0.2 (ระบบลงเวลา & ลางาน)</span>
-          </footer>
-        </main>
-      </div>
+              <footer className="page-footer">
+                <span>PRIME DIGITAL CONSULTANT</span>
+                <span>พื้นที่ทำงานของเรา · เวอร์ชัน 0.2 (ระบบลงเวลา & ลางาน)</span>
+              </footer>
+            </div>
+          </aside>
+        </>
+      )}
 
       {/* MODAL: Knock Request */}
       {knockTarget && (

@@ -637,5 +637,571 @@
   color: #94a3b8;
 }
 
+/* =========================================================================
+   IMMERSIVE FULL-SCREEN VIRTUAL OFFICE DASHBOARD STYLES
+   ========================================================================= */
+
+.immersive-app-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #e8dbc3;
+  user-select: none;
+}
+
+/* Full-Screen Map Canvas */
+.immersive-map-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, #f2e7d3 0%, #e3d2b7 100%);
+}
+
+.immersive-map-viewport {
+  position: relative;
+  width: min(100vw, calc(100vh * (3 / 2)));
+  height: min(100vh, calc(100vw * (2 / 3)));
+  max-width: 100vw;
+  max-height: 100vh;
+  box-shadow: 0 10px 50px rgba(40, 25, 10, 0.15);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.immersive-map-viewport.drawer-open {
+  transform: scale(0.94) translateX(-50px);
+}
+
+.immersive-map-viewport > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+/* Floating Room Pin & Living Avatars */
+.immersive-map-room {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.immersive-map-room:hover {
+  transform: translateY(-4px);
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
+}
+
+.immersive-map-room.hub { left: 18%; top: 18%; }
+.immersive-map-room.project { right: 12%; top: 15%; }
+.immersive-map-room.focus { left: 14%; top: 64%; }
+.immersive-map-room.coffee { right: 12%; top: 65%; }
+
+.room-pin-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 16px rgba(23, 63, 97, 0.15);
+  color: #173f61;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.room-pin-pill.my-current-room {
+  background: #173f61;
+  color: #ffffff;
+  border-color: #1c5375;
+  box-shadow: 0 0 0 3px rgba(28, 83, 117, 0.25), 0 6px 20px rgba(23, 63, 97, 0.3);
+}
+
+.room-pin-pill.my-current-room .tiny-dot {
+  background: #38ef7d;
+  box-shadow: 0 0 8px #38ef7d;
+}
+
+.room-count-badge {
+  background: rgba(23, 63, 97, 0.08);
+  color: #173f61;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 6px;
+  line-height: 1.3;
+}
+
+.room-pin-pill.my-current-room .room-count-badge {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+/* TOP FLOATING ISLAND */
+.floating-top-island {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 10px 32px rgba(18, 45, 68, 0.1);
+  border-radius: 40px;
+  padding: 5px 14px 5px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 95vw;
+}
+
+.island-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.island-brand-mark {
+  width: 32px;
+  height: 32px;
+  background: #1c5375;
+  color: white;
+  display: grid;
+  place-items: center;
+  border-radius: 10px 10px 10px 3px;
+  font: bold 20px/1 'Segoe UI', sans-serif;
+  flex-shrink: 0;
+}
+
+.island-brand-text strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #173f61;
+  letter-spacing: 0.5px;
+  display: block;
+  line-height: 1.1;
+}
+
+.island-brand-text small {
+  font-size: 9px;
+  color: #738694;
+  display: block;
+}
+
+.island-divider {
+  width: 1px;
+  height: 24px;
+  background: #e2e8f0;
+  flex-shrink: 0;
+}
+
+.island-clock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.island-holiday-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.island-holiday-tag.public {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.island-holiday-tag.weekend {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.island-holiday-tag:hover {
+  transform: scale(1.02);
+  filter: brightness(0.97);
+}
+
+.island-status-select {
+  border: 1px solid #dce5e9;
+  border-radius: 18px;
+  background: #f8fafc;
+  color: #1e293b;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.island-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* BOTTOM FLOATING DOCK */
+.floating-bottom-dock {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  background: rgba(16, 37, 53, 0.94);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 16px 45px rgba(5, 17, 28, 0.35);
+  border-radius: 32px;
+  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 95vw;
+}
+
+.dock-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 52px;
+  height: 50px;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 14px;
+  border: 0;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.dock-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  transform: translateY(-2px);
+}
+
+.dock-btn.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.dock-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #38ef7d;
+}
+
+.dock-btn-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.dock-badge {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  background: #ef4444;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 10px;
+  line-height: 1.2;
+}
+
+.dock-badge.leave-badge {
+  background: #a855f7;
+}
+
+.dock-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Embedded Voice Controller in Dock */
+.dock-voice-module {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dock-voice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #10b981;
+  color: white;
+  border: 0;
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dock-voice-btn.muted {
+  background: #ef4444;
+}
+
+.dock-voice-btn.speaking {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4), 0 0 12px #10b981;
+  transform: scale(0.98);
+}
+
+.dock-voice-btn:hover {
+  filter: brightness(1.1);
+}
+
+.dock-meet-btn {
+  background: #2563eb;
+  color: white;
+  border: 0;
+  border-radius: 14px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dock-meet-btn:hover {
+  background: #1d4ed8;
+}
+
+/* SLIDE-OVER GLASS DRAWER */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 25, 38, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 140;
+  transition: opacity 0.3s ease;
+}
+
+.slide-over-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(720px, 94vw);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-left: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: -15px 0 50px rgba(10, 30, 50, 0.2);
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-header {
+  height: 64px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+}
+
+.drawer-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drawer-header-title h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.drawer-header-title span {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.drawer-close-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.drawer-close-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* FLOATING ROOM CARD (When hovering/clicking a room on canvas) */
+.floating-room-popover {
+  position: absolute;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 12px 36px rgba(15, 35, 55, 0.2);
+  width: 260px;
+  animation: fadeInPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInPop {
+  from { opacity: 0; transform: scale(0.95) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.room-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.room-popover-header strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.room-popover-desc {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.room-popover-occupants {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.room-popover-person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #334155;
+}
+
+.room-popover-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Responsive Overrides */
+@media (max-width: 900px) {
+  .floating-top-island {
+    top: 8px;
+    padding: 4px 10px;
+    gap: 8px;
+  }
+  .island-holiday-tag {
+    max-width: 140px;
+    font-size: 10px;
+  }
+  .floating-bottom-dock {
+    bottom: 10px;
+    padding: 5px 8px;
+    gap: 4px;
+  }
+  .dock-btn {
+    min-width: 44px;
+    height: 44px;
+    padding: 2px 4px;
+  }
+  .dock-btn-label {
+    font-size: 8px;
+  }
+  .slide-over-drawer {
+    width: 100vw;
+  }
+}
+
+
 
 
