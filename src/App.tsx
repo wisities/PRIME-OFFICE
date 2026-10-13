@@ -476,7 +476,7 @@ export default function App() {
   const room = rooms.find(r => r.id === selected) || initialRooms[0];
   const online = members.filter(m => m.online);
   const occupants = online.filter(m => m.room === selected);
-  const incoming = knocks.filter(k => k.state === 'pending' && Date.now() - new Date(k.created_at).getTime() < 300000);
+  const incoming = me.room === 'focus' ? [] : knocks.filter(k => k.state === 'pending' && Date.now() - new Date(k.created_at).getTime() < 300000);
 
   useEffect(() => { setNote(me.note || ''); }, [me.note, demo]);
 
@@ -495,6 +495,10 @@ export default function App() {
   }, []);
 
   const joinHuddle = useCallback(async (targetRoomId: RoomId) => {
+    if (targetRoomId === 'focus' || me.room === 'focus') {
+      notify('ห้อง Focus Zone เป็นโซนทำงานแบบเงียบ ไม่รองรับระบบเสียง 🤫');
+      return;
+    }
     setError('');
     try {
       if (!voiceClientRef.current) {
@@ -640,13 +644,6 @@ export default function App() {
     toggleMute();
   }, [toggleMute]);
 
-  // When moving between rooms, if you leave the huddle room, leave huddle automatically
-  useEffect(() => {
-    if (inHuddle && huddleRoomId && me.room !== huddleRoomId) {
-      leaveHuddle();
-    }
-  }, [me.room, inHuddle, huddleRoomId, leaveHuddle]);
-
   // Spacebar Push-to-Talk (Hold Spacebar to speak)
   useEffect(() => {
     if (!inHuddle) return;
@@ -693,6 +690,17 @@ export default function App() {
 
   // WebRTC Native Video Conference Handlers (Replaces Google Meet)
   const startConference = useCallback(async (roomId: RoomId) => {
+    // 0. Focus Zone cannot have conference
+    if (roomId === 'focus' || me.room === 'focus') {
+      notify('ห้อง Focus Zone เป็นโซนสมาธิส่วนตัว ตัดฟังก์ชันการประชุมออก 🤫');
+      return;
+    }
+    // Must enter room first before starting or joining meeting
+    if (me.room !== roomId) {
+      notify(`ต้องเข้าห้อง ${rooms.find(r => r.id === roomId)?.name || ''} ก่อนกดเข้าห้องประชุม`);
+      return;
+    }
+
     // 1. If currently active in voice huddle, pause/leave voice huddle so mics do not conflict!
     if (inHuddle && voiceClientRef.current) {
       voiceClientRef.current.leave();
@@ -728,6 +736,17 @@ export default function App() {
     setIsConferenceMinimized(false);
     notify('ออกจากห้องประชุมวิดีโอแล้ว 👋');
   }, []);
+
+  // When moving between rooms, if you leave the huddle room, leave huddle automatically
+  useEffect(() => {
+    if (inHuddle && huddleRoomId && me.room !== huddleRoomId) {
+      leaveHuddle();
+    }
+    if (me.room === 'focus') {
+      if (inHuddle) leaveHuddle();
+      if (conferenceOpen) closeConference();
+    }
+  }, [me.room, inHuddle, huddleRoomId, leaveHuddle, conferenceOpen, closeConference]);
 
   async function action(fn: () => Promise<void>) {
     setBusy(true);
@@ -1003,6 +1022,11 @@ export default function App() {
 
   async function sendKnock() {
     if (!knockTarget) return;
+    if (knockTarget.room === 'focus') {
+      notify(`${knockTarget.name} อยู่ในห้อง Focus Zone (กำลังโฟกัสงาน) ปิดรับคำขอคุย กรุณาโทรเบอร์มือถือหากมีงานด่วน 📵`);
+      setKnockTarget(null);
+      return;
+    }
     await action(async () => {
       if (demo) {
         notify('โหมดสาธิต: จำลองคำขอคุยกับ ' + knockTarget.name + ' แล้ว ไม่มีการส่งจริง');
@@ -1175,10 +1199,16 @@ export default function App() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelected(r.id);
-                        if (m.id !== me.id) setKnockTarget(m);
+                        if (m.id !== me.id) {
+                          if (m.room === 'focus') {
+                            notify(`${m.name} อยู่ในห้อง Focus Zone (กำลังโฟกัสงาน) ปิดรับคำขอคุย กรุณาโทรเบอร์มือถือหากมีงานด่วน 📵`);
+                          } else {
+                            setKnockTarget(m);
+                          }
+                        }
                       }}
                       aria-label={`${m.name} ${statuses[m.status]}`}
-                      title={`${m.name}: ${statuses[m.status]}`}
+                      title={m.room === 'focus' ? `${m.name}: กำลังโฟกัสงานใน Focus Zone (กรุณาโทรเบอร์มือถือหากมีงานด่วน)` : `${m.name}: ${statuses[m.status]}`}
                     >
                       <Avatar member={m} small isSpeaking={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking)} />
                       <span>{m.id === me.id ? 'คุณ' : m.name}</span>
@@ -1233,6 +1263,10 @@ export default function App() {
                     <button className="primary" onClick={() => void updateProfile({ room_id: activeR.id })}>
                       <DoorOpen size={16} /> ย้ายเข้าห้องนี้
                     </button>
+                  ) : activeR.id === 'focus' ? (
+                    <div className="focus-zone-card-notice">
+                      <span>🤫 โซนสมาธิส่วนตัว: ปิดเสียงและการประชุมเพื่อโฟกัสงาน (หากมีงานด่วนกรุณาโทรเข้าเบอร์มือถือ)</span>
+                    </div>
                   ) : (
                     <>
                       {inHuddle && huddleRoomId === activeR.id ? (
@@ -1240,15 +1274,15 @@ export default function App() {
                           <PhoneOff size={15} color="#ef4444" /> วางสายเสียง
                         </button>
                       ) : (
-                        <button className="primary" onClick={() => joinHuddle(activeR.id)}>
+                        <button className="secondary" onClick={() => joinHuddle(activeR.id)}>
                           <Mic size={15} /> เข้าสายเสียงห้องนี้
                         </button>
                       )}
+                      <button className="primary" style={{ background: '#2563eb' }} onClick={() => { setSelectedRoomCard(null); void startConference(activeR.id); }}>
+                        <Video size={15} /> ประชุมวิดีโอห้องนี้ (WebRTC)
+                      </button>
                     </>
                   )}
-                  <button className="primary" style={{ background: '#2563eb' }} onClick={() => { setSelectedRoomCard(null); void startConference(activeR.id); }}>
-                    <Video size={15} /> ประชุมวิดีโอห้องนี้ (WebRTC)
-                  </button>
                 </div>
               </>
             );
@@ -1322,8 +1356,12 @@ export default function App() {
         </select>
 
         <div className="island-actions">
-          <button className="icon-button bell" onClick={() => setNoticeOpen(true)} title={`การแจ้งเตือน ${incoming.length} รายการ`}>
-            <Bell size={17} />
+          <button 
+            className="icon-button bell" 
+            onClick={() => setNoticeOpen(true)} 
+            title={me.room === 'focus' ? 'ห้อง Focus Zone: ปิดแจ้งเตือน (โหมดห้ามรบกวน)' : `การแจ้งเตือน ${incoming.length} รายการ`}
+          >
+            <Bell size={17} style={me.room === 'focus' ? { opacity: 0.5 } : undefined} />
             {incoming.length > 0 && <b>{incoming.length}</b>}
           </button>
           <button 
@@ -1370,7 +1408,17 @@ export default function App() {
         <div className="dock-divider" />
 
         {/* Voice Huddle Controller in Dock */}
-        {inHuddle && huddleRoomId ? (
+        {me.room === 'focus' ? (
+          <button 
+            className="dock-btn disabled" 
+            style={{ opacity: 0.5, cursor: 'not-allowed' }} 
+            onClick={() => notify('ห้อง Focus Zone เป็นโซนเงียบ ปิดระบบเสียงและการโทร 🤫')} 
+            title="ห้อง Focus Zone เป็นโซนเงียบ ปิดระบบเสียงและการโทร"
+          >
+            <MicOff size={19} color="#94a3b8" />
+            <span className="dock-btn-label">ปิดไมค์</span>
+          </button>
+        ) : inHuddle && huddleRoomId ? (
           <div className="dock-voice-module">
             <button
               className={`dock-voice-btn ${isMuted ? 'muted' : ''} ${isSpeaking ? 'speaking' : ''}`}
@@ -1398,17 +1446,22 @@ export default function App() {
 
         {/* WebRTC Video Conference Launcher */}
         <button 
-          className={`dock-btn ${conferenceOpen ? 'active' : ''}`} 
+          className={`dock-btn ${conferenceOpen ? 'active' : ''} ${me.room === 'focus' ? 'disabled' : ''}`} 
+          style={me.room === 'focus' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           onClick={() => {
+            if (me.room === 'focus') {
+              notify('ห้อง Focus Zone เป็นโซนโฟกัสการทำงาน ตัดฟังก์ชันการประชุมออก 🤫');
+              return;
+            }
             if (conferenceOpen) {
               setIsConferenceMinimized(false);
             } else {
-              void startConference(me.room || 'project');
+              void startConference(me.room);
             }
           }} 
-          title="ห้องประชุมวิดีโอ (WebRTC Meeting)"
+          title={me.room === 'focus' ? 'ห้อง Focus Zone ไม่รองรับการประชุม (โหมดห้ามรบกวน)' : `ห้องประชุมวิดีโอห้อง ${rooms.find(r => r.id === me.room)?.name || ''}`}
         >
-          <Video size={19} color={conferenceOpen ? '#38ef7d' : undefined} />
+          <Video size={19} color={me.room === 'focus' ? '#94a3b8' : conferenceOpen ? '#38ef7d' : undefined} />
           <span className="dock-btn-label">Meeting</span>
           {conferenceOpen && <span className="dock-badge" style={{ background: '#10b981' }}>LIVE</span>}
         </button>
@@ -1875,9 +1928,15 @@ export default function App() {
                     </small>
                   </div>
                   {m.id !== me.id && (
-                    <button className="secondary" disabled={!m.online || Boolean(m.leaveToday)} onClick={() => setKnockTarget(m)}>
-                      <Hand size={16} />ขอคุย
-                    </button>
+                    m.room === 'focus' ? (
+                      <span className="focus-zone-badge-tag" title="เพื่อนกำลังโฟกัสการทำงานอยู่ กรุณาโทรมือถือไปหาแทนหากมีงานด่วน">
+                        🤫 โฟกัสงาน (โทรหาหากด่วน)
+                      </span>
+                    ) : (
+                      <button className="secondary" disabled={!m.online || Boolean(m.leaveToday)} onClick={() => setKnockTarget(m)}>
+                        <Hand size={16} />ขอคุย
+                      </button>
+                    )
                   )}
                 </article>
               ))}
@@ -2140,7 +2199,7 @@ export default function App() {
                 <h2><Video size={21} />ระบบห้องประชุมวิดีโอ (WebRTC Native)</h2>
                 <p>ระบบประชุมวิดีโอแบบเปิดกล้องและแชร์หน้าจอ ทำงานในตัวแบบเสร็จสรรพ ไม่ต้องใช้ Google Meet</p>
                 <div className="setup-note" style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
-                  <p>✅ <strong>ระบบประชุมพร้อมใช้งาน:</strong> ทุกห้องทำงาน (PRIME Hub, Project Room, Focus Zone, Coffee Corner) มีห้องประชุมวิดีโอความละเอียดสูงแยกอิสระในตัว</p>
+                  <p>✅ <strong>ระบบประชุมพร้อมใช้งาน:</strong> ห้องประชุมวิดีโอความละเอียดสูงพร้อมใช้งานในห้อง PRIME Hub, Project Room และ Coffee Corner (ยกเว้น Focus Zone ที่สงวนไว้เป็นโซนสมาธิส่วนตัว)</p>
                   <p style={{ marginTop: '8px' }}>🔐 <strong>ความปลอดภัย:</strong> เข้ารหัสแบบ End-to-End P2P ส่งสัญญาณภาพและเสียงตรงระหว่างสมาชิกในห้องประชุม</p>
                 </div>
                 <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
@@ -2214,14 +2273,28 @@ export default function App() {
             <button autoFocus className="icon-button close-modal" aria-label="ปิด" onClick={() => setKnockTarget(null)}><X /></button>
             <Avatar member={knockTarget} />
             <h2 id="knock-title">ขอคุยกับ{knockTarget.name}</h2>
-            <p>
-              เชิญมาเจอกันที่ {rooms.find(r => r.id === me.room)?.name}<br />
-              {knockTarget.status === 'focus' ? 'เพื่อนกำลังโฟกัส สามารถเลือกตอบรับภายหลังได้' : 'ผู้รับเลือกตอบรับหรือปฏิเสธได้'}
-            </p>
-            <button className="primary" disabled={busy} onClick={sendKnock}>
-              <Hand size={18} />{demo ? 'ทดลองเคาะประตู' : 'ส่งคำขอคุย'}
-            </button>
-            <small>{demo ? 'ไม่มีการส่งข้อความจริง' : 'คำขอหมดอายุใน 5 นาที'}</small>
+            {knockTarget.room === 'focus' ? (
+              <>
+                <p style={{ color: '#e11d48', marginTop: '12px' }}>
+                  ⚠️ เพื่อนกำลังโฟกัสการทำงานอยู่ใน Focus Zone (ปิดรับคำขอคุย)<br />
+                  <strong>หากมีงานด่วน กรุณาโทรเบอร์มือถือหาโดยตรง</strong>
+                </p>
+                <button className="secondary" style={{ marginTop: '16px' }} onClick={() => setKnockTarget(null)}>
+                  ปิดหน้าต่าง
+                </button>
+              </>
+            ) : (
+              <>
+                <p>
+                  เชิญมาเจอกันที่ {rooms.find(r => r.id === me.room)?.name}<br />
+                  {knockTarget.status === 'focus' ? 'เพื่อนกำลังโฟกัส สามารถเลือกตอบรับภายหลังได้' : 'ผู้รับเลือกตอบรับหรือปฏิเสธได้'}
+                </p>
+                <button className="primary" disabled={busy} onClick={sendKnock}>
+                  <Hand size={18} />{demo ? 'ทดลองเคาะประตู' : 'ส่งคำขอคุย'}
+                </button>
+                <small>{demo ? 'ไม่มีการส่งข้อความจริง' : 'คำขอหมดอายุใน 5 นาที'}</small>
+              </>
+            )}
           </section>
         </div>
       )}
@@ -2232,7 +2305,9 @@ export default function App() {
           <section className="modal notifications" role="dialog" aria-modal="true" aria-labelledby="notifications-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') setNoticeOpen(false); }}>
             <button autoFocus className="icon-button close-modal" aria-label="ปิด" onClick={() => setNoticeOpen(false)}><X /></button>
             <h2 id="notifications-title">คำขอคุย</h2>
-            {demo ? (
+            {me.room === 'focus' ? (
+              <p>ขณะนี้คุณอยู่ในห้อง Focus Zone ระบบปิดการแจ้งเตือนชั่วคราวเพื่อให้คุณมีสมาธิกับการทำงาน หากมีงานด่วนเพื่อนร่วมทีมจะโทรหาเบอร์มือถือโดยตรง 📵</p>
+            ) : demo ? (
               <p>โหมดสาธิตไม่มีคำขอจากสมาชิกจริง</p>
             ) : incoming.length === 0 ? (
               <p>ยังไม่มีคำขอใหม่</p>

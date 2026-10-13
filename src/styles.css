@@ -1175,6 +1175,30 @@
   gap: 6px;
 }
 
+.focus-zone-card-notice {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.focus-zone-badge-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
 /* Responsive Overrides */
 @media (max-width: 900px) {
   .floating-top-island {

@@ -58,8 +58,8 @@ export type Room = {
 
 export const rooms: Room[] = [
   {id:'hub',name:'PRIME Hub',thai:'พื้นที่ทำงานกลาง',description:'เริ่มวันใหม่ แบ่งปันไอเดีย และทำงานไปด้วยกัน',task:'อัปเดตสิ่งที่ทำวันนี้ให้ทีมรู้'},
-  {id:'project',name:'Project Room',thai:'ห้องคุยโปรเจกต์',description:'รวมทีมคุยงานและเปิดประชุมผ่าน Google Meet',task:'ปักหมุดลิงก์ประชุมได้ในหน้าผู้ดูแล'},
-  {id:'focus',name:'Focus Zone',thai:'มุมทำงานเงียบ',description:'พื้นที่สำหรับงานที่ต้องใช้สมาธิ เคาะประตูก่อนคุย',task:'เคารพช่วงเวลาโฟกัสของเพื่อนร่วมทีม'},
+  {id:'project',name:'Project Room',thai:'ห้องคุยโปรเจกต์',description:'รวมทีมคุยงานและเปิดห้องประชุม WebRTC Meeting',task:'กดเข้าห้องก่อนเริ่มประชุมงาน'},
+  {id:'focus',name:'Focus Zone',thai:'มุมทำงานเงียบ',description:'พื้นที่งานที่ต้องใช้สมาธิขั้นสูง ปิดเสียงและปิดการประชุม โทรหามือถือหากด่วน',task:'โหมดห้ามรบกวน ไม่อนุญาตให้เคาะหรือประชุม'},
   {id:'coffee',name:'Coffee Corner',thai:'มุมพักและพูดคุย',description:'พักสายตา เติมกาแฟ แล้วกลับมาพร้อมไอเดียใหม่',task:'แวะมาทักทายกันได้เสมอ'}
 ];
 
