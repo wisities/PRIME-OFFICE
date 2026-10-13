@@ -26,10 +26,10 @@ The interface is designed as an edge-to-edge Virtual Office canvas with zero scr
 - **Bottom Floating Dock**: Floating dock inspired by macOS/iPadOS containing:
   - Office view toggle
   - Live Voice Huddle controller (microphone toggle, Spacebar Push-to-Talk, loopback speaker test)
-  - Google Meet popup launcher (opens a focused 520x680px meeting companion window without leaving the office)
+  - Native WebRTC Video Conference launcher (opens instant video meeting with webcam, audio, screen share, and mini-player — completely replacing Google Meet)
   - Slide-over drawer navigation: ลงเวลา & ลา (Attendance & Thai Holidays), สมาชิก (Team Members), งานวันนี้ (Daily Focus), ประกาศ (Announcements), แอดมิน (Admin Settings)
 - **Slide-over Glass Drawer**: Clicking any drawer item opens a full-featured frosted-glass slide-over from the right (`width: min(720px, 94vw)`), allowing access to all features without breaking immersion. Closes with a smooth animation via backdrop click or `Esc` key.
-- **Interactive Room Pins & Popovers**: Room name badges on the map glow when members are active inside. Clicking any room badge opens a floating glass card with room occupants, Google Meet quick link, and voice huddle join button.
+- **Interactive Room Pins & Popovers**: Room name badges on the map glow when members are active inside. Clicking any room badge opens a floating glass card with room occupants, quick video conference join button, and voice huddle join button.
 
 Full architecture and operational guide in **[SETUP-TH.md](SETUP-TH.md)**.
 

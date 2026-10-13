@@ -19,6 +19,8 @@ import {
   THAI_ANNUAL_FIXED_HOLIDAYS, THAI_MONTH_NAMES
 } from './domain.mjs';
 import { VoiceHuddleClient, playChime } from './voice';
+import { VideoConferenceClient } from './conference';
+import { ConferenceModal } from './ConferenceModal';
 
 type Page = 'office' | 'team' | 'attendance' | 'today' | 'announcements' | 'admin';
 type Knock = { id:string; sender: string; receiver_id?:string; room_id:RoomId; state:string; created_at:string };
@@ -124,6 +126,12 @@ export default function App() {
   const [micLevel, setMicLevel] = useState(0);
   const voiceClientRef = useRef<VoiceHuddleClient | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
+
+  // WebRTC Video Conference State (Formal Video & Screen Sharing Conference)
+  const [conferenceOpen, setConferenceOpen] = useState(false);
+  const [conferenceRoomId, setConferenceRoomId] = useState<RoomId | null>(null);
+  const [isConferenceMinimized, setIsConferenceMinimized] = useState(false);
+  const conferenceClientRef = useRef<VideoConferenceClient | null>(null);
 
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
@@ -587,25 +595,43 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleEsc);
   }, [page, profileOpen, noticeOpen, knockTarget]);
 
-  // Floating Pop-up Window for Google Meet (Opens on top of screen, not a new full tab)
-  const launchGoogleMeetWindow = useCallback((url?: string) => {
-    const meetUrl = url && validMeetUrl(url) ? url : 'https://meet.google.com/new';
-    const popupWidth = 1080;
-    const popupHeight = 720;
-    const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
-    const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
-    window.open(
-      meetUrl,
-      'GoogleMeetPopup',
-      `width=${popupWidth},height=${popupHeight},top=${top},left=${left},popup=yes,menubar=no,toolbar=no,location=no,status=no`
-    );
-    notify('เปิด Google Meet หน้าต่าง Pop-up ลอยแล้ว 📹');
-  }, []);
+  // WebRTC Native Video Conference Handlers (Replaces Google Meet)
+  const startConference = useCallback(async (roomId: RoomId) => {
+    // 1. If currently active in voice huddle, pause/leave voice huddle so mics do not conflict!
+    if (inHuddle && voiceClientRef.current) {
+      voiceClientRef.current.leave();
+      setInHuddle(false);
+      setHuddleRoomId(null);
+      notify('สลับเข้าห้องประชุมวิดีโอ (ปิด Voice Huddle ชั่วคราว) 📹');
+    }
 
-  const openGoogleMeet = useCallback((targetRoom: Room) => {
-    // Launch Google Meet as a floating pop-up window directly over the webpage
-    launchGoogleMeetWindow(targetRoom.meet_url);
-  }, [launchGoogleMeetWindow]);
+    setConferenceRoomId(roomId);
+    setConferenceOpen(true);
+    setIsConferenceMinimized(false);
+
+    if (!conferenceClientRef.current) {
+      conferenceClientRef.current = new VideoConferenceClient(me.id, me.name, supabase);
+    } else {
+      conferenceClientRef.current.updateIdentity(me.id, me.name);
+    }
+
+    try {
+      await conferenceClientRef.current.join(roomId);
+      notify(`เข้าร่วมห้องประชุมวิดีโอ ${rooms.find(r => r.id === roomId)?.name || ''} เรียบร้อย 📹`);
+    } catch (err) {
+      console.warn('Conference join error:', err);
+    }
+  }, [inHuddle, me.id, me.name, rooms]);
+
+  const closeConference = useCallback(() => {
+    if (conferenceClientRef.current) {
+      conferenceClientRef.current.leave();
+    }
+    setConferenceOpen(false);
+    setConferenceRoomId(null);
+    setIsConferenceMinimized(false);
+    notify('ออกจากห้องประชุมวิดีโอแล้ว 👋');
+  }, []);
 
   async function action(fn: () => Promise<void>) {
     setBusy(true);
@@ -1008,8 +1034,8 @@ export default function App() {
                       )}
                     </>
                   )}
-                  <button className="secondary" onClick={() => openGoogleMeet(activeR)}>
-                    <Video size={15} /> เปิด Google Meet Popup
+                  <button className="primary" style={{ background: '#2563eb' }} onClick={() => { setSelectedRoomCard(null); void startConference(activeR.id); }}>
+                    <Video size={15} /> ประชุมวิดีโอห้องนี้ (WebRTC)
                   </button>
                 </div>
               </>
@@ -1158,10 +1184,21 @@ export default function App() {
           </button>
         )}
 
-        {/* Google Meet Popup Quick Launcher */}
-        <button className="dock-meet-btn" onClick={() => openGoogleMeet(rooms.find(r => r.id === me.room) || rooms[0])} title="เปิด Google Meet แบบ Pop-up ทับหน้าจอ">
+        {/* WebRTC Video Conference Launcher */}
+        <button 
+          className={`dock-conference-btn ${conferenceOpen ? 'active' : ''}`} 
+          onClick={() => {
+            if (conferenceOpen) {
+              setIsConferenceMinimized(false);
+            } else {
+              void startConference(me.room || 'project');
+            }
+          }} 
+          title="เปิดห้องประชุมวิดีโอ (WebRTC Video Conference)"
+        >
           <Video size={16} />
-          <span>Meet Popup</span>
+          <span>{conferenceOpen ? 'เปิดห้องประชุม' : 'ประชุมวิดีโอ'}</span>
+          {conferenceOpen && <span className="dock-live-dot" />}
         </button>
 
         <div className="dock-divider" />
@@ -1710,26 +1747,21 @@ export default function App() {
           {page === 'admin' && me.isAdmin && (
             <div className="admin-grid">
               <section className="panel">
-                <h2><Video size={21} />ลิงก์ประชุมประจำห้อง</h2>
-                <p>ใช้ลิงก์ Google Meet รูปแบบ https://meet.google.com/abc-defg-hij</p>
-                <form className="admin-form" onSubmit={e => {
-                  e.preventDefault();
-                  void action(async () => {
-                    if (meetingUrl && !validMeetUrl(meetingUrl)) throw Error('กรุณาใส่ลิงก์ Google Meet ให้ถูกต้อง');
-                    if (demo) {
-                      setRooms(rs => rs.map(r => r.id === selected ? { ...r, meet_url: meetingUrl } : r));
-                    } else {
-                      const { error } = await supabase!.rpc('admin_set_meeting', { p_room: selected, p_url: meetingUrl });
-                      if (error) throw error;
-                      await refresh();
-                    }
-                    notify(demo ? 'บันทึกลิงก์สาธิตชั่วคราวแล้ว' : 'บันทึกลิงก์ประชุมแล้ว');
-                  });
-                }}>
-                  <label>ห้อง<select value={selected} onChange={e => setSelected(e.target.value as RoomId)}>{rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-                  <label>ลิงก์ประชุม<input type="url" value={meetingUrl} onChange={e => setMeetingUrl(e.target.value.trim())} placeholder="https://meet.google.com/abc-defg-hij" /></label>
-                  <button className="primary" disabled={busy}>บันทึกลิงก์</button>
-                </form>
+                <h2><Video size={21} />ระบบห้องประชุมวิดีโอ (WebRTC Native)</h2>
+                <p>ระบบประชุมวิดีโอแบบเปิดกล้องและแชร์หน้าจอ ทำงานในตัวแบบเสร็จสรรพ ไม่ต้องใช้ Google Meet</p>
+                <div className="setup-note" style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
+                  <p>✅ <strong>ระบบประชุมพร้อมใช้งาน:</strong> ทุกห้องทำงาน (PRIME Hub, Project Room, Focus Zone, Coffee Corner) มีห้องประชุมวิดีโอความละเอียดสูงแยกอิสระในตัว</p>
+                  <p style={{ marginTop: '8px' }}>🔐 <strong>ความปลอดภัย:</strong> เข้ารหัสแบบ End-to-End P2P ส่งสัญญาณภาพและเสียงตรงระหว่างสมาชิกในห้องประชุม</p>
+                </div>
+                <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+                  <button 
+                    type="button" 
+                    className="primary" 
+                    onClick={() => { void startConference('project'); }}
+                  >
+                    <Video size={16} /> ทดสอบเปิดห้องประชุม Project Room
+                  </button>
+                </div>
               </section>
 
               <section className="panel">
@@ -1928,11 +1960,11 @@ export default function App() {
             </button>
             <button 
               className="huddle-dock-btn meet-link"
-              onClick={() => openGoogleMeet(rooms.find(r => r.id === huddleRoomId) || room)}
-              title="เปิด Google Meet ของห้องนี้"
+              onClick={() => { void startConference(huddleRoomId || 'project'); }}
+              title="เปิดห้องประชุมวิดีโอ (WebRTC Conference)"
             >
               <Video size={16} />
-              <span>Google Meet</span>
+              <span>ประชุมวิดีโอ</span>
             </button>
             <button 
               className="huddle-dock-btn hangup"
@@ -1944,6 +1976,17 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* 6. WEBRTC VIDEO CONFERENCE STAGE & MINI PLAYER */}
+      {conferenceOpen && conferenceClientRef.current && (
+        <ConferenceModal
+          client={conferenceClientRef.current}
+          roomName={`ห้อง ${rooms.find(r => r.id === conferenceRoomId)?.name || 'ประชุม'}`}
+          onClose={closeConference}
+          isMinimized={isConferenceMinimized}
+          onToggleMinimize={() => setIsConferenceMinimized(!isConferenceMinimized)}
+        />
       )}
 
 
