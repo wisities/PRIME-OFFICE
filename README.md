@@ -15,7 +15,20 @@ npm test
 npm run build
 ```
 
-Production site is automatically built and deployed to Cloudflare Pages (**https://prime-virtual-office.pages.dev**) on every `git push` to `master` via GitHub integration.
+Production site is automatically built and deployed to Cloudflare Pages (**https://prime-virtual-office.pages.dev**) on every `git push` to `main`/`master` via GitHub integration.
+
+## UI Architecture: Immersive Full-Screen Virtual Office
+
+The interface is designed as an edge-to-edge Virtual Office canvas with zero screen clutter:
+- **Edge-to-Edge Canvas (`100vw` x `100vh`)**: The 3D isometric office artwork (`office.png`) forms the main full-screen environment. Live team avatars sit at their respective desks/rooms in real-time.
+- **Top Floating Island**: Centered frosted-glass capsule displaying the PRIME company logo, live digital clock, Thai official holiday badge, quick check-in pill, status selector, notification bell, and user profile.
+- **Bottom Floating Dock**: Floating dock inspired by macOS/iPadOS containing:
+  - Office view toggle
+  - Live Voice Huddle controller (microphone toggle, Spacebar Push-to-Talk, loopback speaker test)
+  - Google Meet popup launcher (opens a focused 520x680px meeting companion window without leaving the office)
+  - Slide-over drawer navigation: ลงเวลา & ลา (Attendance & Thai Holidays), สมาชิก (Team Members), งานวันนี้ (Daily Focus), ประกาศ (Announcements), แอดมิน (Admin Settings)
+- **Slide-over Glass Drawer**: Clicking any drawer item opens a full-featured frosted-glass slide-over from the right (`width: min(720px, 94vw)`), allowing access to all features without breaking immersion. Closes with a smooth animation via backdrop click or `Esc` key.
+- **Interactive Room Pins & Popovers**: Room name badges on the map glow when members are active inside. Clicking any room badge opens a floating glass card with room occupants, Google Meet quick link, and voice huddle join button.
 
 Full architecture and operational guide in **[SETUP-TH.md](SETUP-TH.md)**.
 
