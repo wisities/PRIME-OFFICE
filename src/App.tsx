@@ -3126,7 +3126,7 @@ export default function App() {
 
       {/* MODAL: Knock Request */}
       {knockTarget && (
-        <div className="modal-backdrop" onClick={() => setKnockTarget(null)}>
+        <div className="modal-backdrop">
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="knock-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') setKnockTarget(null); }}>
             <button autoFocus className="icon-button close-modal" aria-label="ปิด" onClick={() => setKnockTarget(null)}><X /></button>
             <Avatar member={knockTarget} />
@@ -3159,7 +3159,7 @@ export default function App() {
 
       {/* MODAL: Notifications */}
       {noticeOpen && (
-        <div className="modal-backdrop" onClick={() => setNoticeOpen(false)}>
+        <div className="modal-backdrop">
           <section className="modal notifications" role="dialog" aria-modal="true" aria-labelledby="notifications-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') setNoticeOpen(false); }}>
             <button autoFocus className="icon-button close-modal" aria-label="ปิด" onClick={() => setNoticeOpen(false)}><X /></button>
             <h2 id="notifications-title">คำขอคุย</h2>
@@ -3185,7 +3185,7 @@ export default function App() {
 
       {/* MODAL: Edit Profile */}
       {profileOpen && (
-        <div className="modal-backdrop" onClick={() => setProfileOpen(false)}>
+        <div className="modal-backdrop">
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="profile-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') setProfileOpen(false); }}>
             <button autoFocus className="icon-button close-modal" aria-label="ปิด" onClick={() => setProfileOpen(false)}><X /></button>
             <h2 id="profile-title">แก้ไขโปรไฟล์</h2>
@@ -3254,7 +3254,7 @@ export default function App() {
 
       {/* FLASH URGENT BROADCAST COMPOSER MODAL */}
       {urgentModalOpen && (
-        <div className="modal-backdrop" onClick={() => setUrgentModalOpen(false)}>
+        <div className="modal-backdrop">
           <section className="modal flash-broadcast-modal" onClick={e => e.stopPropagation()}>
             <button className="icon-button close-modal" onClick={() => setUrgentModalOpen(false)}><X size={18} /></button>
             <div className="flash-modal-badge-icon">
@@ -3318,7 +3318,7 @@ export default function App() {
 
       {/* TASK DELEGATION COMPOSER MODAL */}
       {taskModalOpen && (
-        <div className="modal-backdrop" onClick={() => setTaskModalOpen(false)}>
+        <div className="modal-backdrop">
           <section className="modal task-composer-modal" onClick={e => e.stopPropagation()}>
             <button className="icon-button close-modal" onClick={() => setTaskModalOpen(false)}><X size={18} /></button>
             <div className="task-modal-badge-icon">
@@ -3465,8 +3465,8 @@ export default function App() {
 
       {/* SCREEN CENTER FLASH URGENT BROADCAST POPUP (Excluded from Focus Zone) */}
       {urgentPopup && me.room !== 'focus' && (
-        <div className="urgent-popup-backdrop" onClick={() => setUrgentPopup(null)}>
-          <div className="urgent-flash-popup-card" onClick={e => e.stopPropagation()}>
+        <div className="urgent-popup-backdrop">
+          <div className="urgent-flash-popup-card">
             <div className="flash-popup-glow-border" />
             <div className="flash-popup-header">
               <div className="flash-alert-badge">
