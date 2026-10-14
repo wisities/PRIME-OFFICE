@@ -23,7 +23,7 @@ export function checkAttendanceStatus(date) {
   const d = new Date(date);
   const hours = d.getHours();
   const minutes = d.getMinutes();
-  return (hours > 8 || (hours === 8 && minutes > 5)) ? 'late' : 'on_time';
+  return (hours > 9 || (hours === 9 && minutes > 5)) ? 'late' : 'on_time';
 }
 
 export function formatThaiTime(dateStr) {

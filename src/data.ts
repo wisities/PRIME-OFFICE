@@ -77,8 +77,8 @@ export const leaveTypesConfig: Record<LeaveType, { label: string; emoji: string;
 };
 
 export const periodLabels: Record<'full' | 'morning' | 'afternoon', string> = {
-  full: 'เต็มวัน (08:00 - 17:00)',
-  morning: 'ครึ่งวันเช้า (08:00 - 12:00)',
+  full: 'เต็มวัน (09:00 - 17:00)',
+  morning: 'ครึ่งวันเช้า (09:00 - 12:00)',
   afternoon: 'ครึ่งวันบ่าย (13:00 - 17:00)'
 };
 
@@ -129,11 +129,11 @@ export const sampleLeaves: LeaveRequest[] = [
 ];
 
 export const sampleAttendance: AttendanceRecord[] = [
-  { id: 'att-1', user_id: 'may', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(7, 52, 0)).toISOString(), status: 'on_time' },
-  { id: 'att-2', user_id: 'ton', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(7, 58, 0)).toISOString(), status: 'on_time' },
-  { id: 'att-3', user_id: 'beam', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(8, 0, 0)).toISOString(), status: 'on_time' },
-  { id: 'att-4', user_id: 'nan', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(8, 14, 0)).toISOString(), status: 'late' },
-  { id: 'att-5', user_id: 'kong', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(7, 48, 0)).toISOString(), status: 'on_time' },
-  { id: 'att-6', user_id: 'ploy', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(8, 19, 0)).toISOString(), status: 'late' },
-  { id: 'att-7', user_id: 'art', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(7, 55, 0)).toISOString(), status: 'on_time' }
+  { id: 'att-1', user_id: 'may', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(8, 52, 0)).toISOString(), status: 'on_time' },
+  { id: 'att-2', user_id: 'ton', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(8, 58, 0)).toISOString(), status: 'on_time' },
+  { id: 'att-3', user_id: 'beam', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(9, 0, 0)).toISOString(), status: 'on_time' },
+  { id: 'att-4', user_id: 'nan', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(9, 14, 0)).toISOString(), status: 'late' },
+  { id: 'att-5', user_id: 'kong', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(8, 48, 0)).toISOString(), status: 'on_time' },
+  { id: 'att-6', user_id: 'ploy', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(9, 19, 0)).toISOString(), status: 'late' },
+  { id: 'att-7', user_id: 'art', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(8, 55, 0)).toISOString(), status: 'on_time' }
 ];

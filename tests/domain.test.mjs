@@ -10,11 +10,11 @@ test('corrupted local demo storage recovers safely',()=>{assert.deepEqual(loadDe
 test('email normalization',()=>assert.equal(normalizeEmail('  Team@Example.COM '),'team@example.com'));
 test('multi-tab presence is deduplicated by latest state',()=>{const result=uniquePresence({a:[{user_id:'1',updated_at:'2026-01-01',room:'hub'}],b:[{user_id:'1',updated_at:'2026-01-02',room:'focus'}]});assert.equal(result.length,1);assert.equal(result[0].room,'focus');});
 test('attendance calculation and time formatting',()=>{
-  const onTime = new Date(2026, 9, 12, 7, 55);
-  const late = new Date(2026, 9, 12, 8, 10);
+  const onTime = new Date(2026, 9, 12, 8, 55);
+  const late = new Date(2026, 9, 12, 9, 10);
   assert.equal(checkAttendanceStatus(onTime), 'on_time');
   assert.equal(checkAttendanceStatus(late), 'late');
-  assert.equal(formatThaiTime(onTime), '07:55 น.');
+  assert.equal(formatThaiTime(onTime), '08:55 น.');
 });
 
 test('Thai Government Public Holiday engine verifies company holidays', () => {

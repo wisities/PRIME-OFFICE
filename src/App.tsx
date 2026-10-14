@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { 
-  Home, Users, ClipboardList, Megaphone, Settings, ArrowUpRight, DoorOpen, Hand, 
-  Coffee, Focus, Video, X, Check, LogOut, Bell, Menu, ShieldCheck, Save, Map, 
+import {
+  Home, Users, ClipboardList, Megaphone, Settings, ArrowUpRight, DoorOpen, Hand,
+  Coffee, Focus, Video, X, Check, LogOut, Bell, Menu, ShieldCheck, Save, Map,
   List, Wifi, WifiOff, CalendarCheck, Clock, CheckCircle2, AlertCircle, Plus, Trash2,
   Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles,
   Maximize2, Minimize2, Camera, Heart, ThumbsUp, CheckSquare, MessageSquare, Send,
   Zap, AlertTriangle, Calendar, UserCheck, Square
 } from 'lucide-react';
 import { configured, supabase } from './backend';
-import { 
-  rooms as initialRooms, statuses, sampleMembers, sampleAttendance, sampleLeaves, 
-  leaveTypesConfig, periodLabels, type Room, type RoomId, type Status, type Member, 
+import {
+  rooms as initialRooms, statuses, sampleMembers, sampleAttendance, sampleLeaves,
+  leaveTypesConfig, periodLabels, type Room, type RoomId, type Status, type Member,
   type AttendanceRecord, type LeaveRequest, type LeaveType, type ThaiHoliday
 } from './data';
-import { 
+import {
   loadDemo, validMeetUrl, normalizeEmail, checkAttendanceStatus, formatThaiTime,
   getThaiPublicHoliday, getThaiHolidaysList, calculateWorkingDays, formatThaiFullDate,
   THAI_ANNUAL_FIXED_HOLIDAYS, THAI_MONTH_NAMES
@@ -65,13 +65,13 @@ export function getDeadlineStatus(dueDate?: string, dueTime?: string, status?: s
   if (!dueDate) {
     return { label: 'ไม่มีกำหนดส่ง', type: 'none', text: 'ไม่ระบุวันส่ง' };
   }
-  
+
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
   const dueDateTimeStr = dueTime ? `${dueDate}T${dueTime}:00` : `${dueDate}T23:59:59`;
   const dueDateTime = new Date(dueDateTimeStr);
   const isPast = dueDateTime.getTime() < now.getTime();
-  
+
   if (isPast) {
     const diffHours = Math.floor((now.getTime() - dueDateTime.getTime()) / (1000 * 60 * 60));
     const diffDays = Math.floor(diffHours / 24);
@@ -205,8 +205,8 @@ const defaultFeedPosts: FeedPost[] = [
 ];
 
 type Page = 'office' | 'team' | 'attendance' | 'feed' | 'admin' | 'today' | 'announcements';
-type Knock = { id:string; sender: string; receiver_id?:string; room_id:RoomId; state:string; created_at:string };
-type Notice = { id:string; title:string; body:string };
+type Knock = { id: string; sender: string; receiver_id?: string; room_id: RoomId; state: string; created_at: string };
+type Notice = { id: string; title: string; body: string };
 
 const nav = [
   { id: 'office', label: 'ออฟฟิศของเรา', icon: Home },
@@ -294,7 +294,7 @@ export default function App() {
   const [knocks, setKnocks] = useState<Knock[]>([]);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [knockTarget, setKnockTarget] = useState<Member | null>(null);
-  
+
   // Voice Huddle State (Real WebRTC Peer-to-Peer Voice)
   const [inHuddle, setInHuddle] = useState(false);
   const [huddleRoomId, setHuddleRoomId] = useState<RoomId | null>(null);
@@ -372,7 +372,7 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('prime-feed-posts-v1', JSON.stringify(feedPosts));
-    } catch {}
+    } catch { }
   }, [feedPosts]);
 
   const [feedFilter, setFeedFilter] = useState<'all' | 'today' | 'announcement'>('all');
@@ -394,7 +394,7 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('prime-tasks-v1', JSON.stringify(tasks));
-    } catch {}
+    } catch { }
   }, [tasks]);
 
   const [feedSubTab, setFeedSubTab] = useState<'feed' | 'tasks'>('feed');
@@ -480,15 +480,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem('prime-demo-v1', JSON.stringify(demoState)); } catch {}
+    try { localStorage.setItem('prime-demo-v1', JSON.stringify(demoState)); } catch { }
   }, [demoState]);
 
   useEffect(() => {
-    try { localStorage.setItem('prime-demo-attendance', JSON.stringify(demoAttendance)); } catch {}
+    try { localStorage.setItem('prime-demo-attendance', JSON.stringify(demoAttendance)); } catch { }
   }, [demoAttendance]);
 
   useEffect(() => {
-    try { localStorage.setItem('prime-demo-leaves', JSON.stringify(demoLeaves)); } catch {}
+    try { localStorage.setItem('prime-demo-leaves', JSON.stringify(demoLeaves)); } catch { }
   }, [demoLeaves]);
 
   const refresh = useCallback(async () => {
@@ -522,14 +522,14 @@ export default function App() {
         try {
           localStorage.setItem('prime-user-name', myRow.name);
           localStorage.setItem('prime-demo-name', myRow.name);
-        } catch {}
+        } catch { }
       }
       if (myRow.avatar_url) {
         setCustomAvatar(myRow.avatar_url);
         try {
           localStorage.setItem('prime-user-avatar', myRow.avatar_url);
           localStorage.setItem('prime-demo-avatar', myRow.avatar_url);
-        } catch {}
+        } catch { }
       }
     }
 
@@ -671,16 +671,16 @@ export default function App() {
 
   const userAvatar = session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture;
   const currentLive = liveMembers.find(m => m.id === session?.user.id);
-  
+
   // Prioritize user's saved custom identity
   const effectiveName = customName || (demo ? demoName : (currentLive?.name || session?.user?.user_metadata?.full_name || 'คุณ'));
   const effectiveAvatar = customAvatar || (demo ? demoAvatar : (currentLive?.avatarUrl || userAvatar || ''));
 
   const me: Member = demo
     ? { id: demoSessionId, name: effectiveName, role: 'ทีม PRIME', room: demoState.room as RoomId, status: demoState.status as Status, online: true, color: 'blue', note: demoState.note, isAdmin: true, avatarUrl: effectiveAvatar }
-    : (currentLive 
-        ? { ...currentLive, name: effectiveName, avatarUrl: effectiveAvatar } 
-        : { id: session?.user?.id || '', name: effectiveName, role: 'ทีม PRIME', room: 'hub', status: 'available', online: false, color: 'blue', avatarUrl: effectiveAvatar });
+    : (currentLive
+      ? { ...currentLive, name: effectiveName, avatarUrl: effectiveAvatar }
+      : { id: session?.user?.id || '', name: effectiveName, role: 'ทีม PRIME', room: 'hub', status: 'available', online: false, color: 'blue', avatarUrl: effectiveAvatar });
 
   // Effective Attendance & Leaves data
   const attendanceList = demo ? demoAttendance : liveAttendance;
@@ -721,7 +721,7 @@ export default function App() {
   const unreadFeedCount = useMemo(() => {
     return feedPosts.filter(p => {
       if (p.authorId === me.id) return false;
-      const hasReacted = 
+      const hasReacted =
         (p.reactions.likes || []).includes(me.id) ||
         (p.reactions.claps || []).includes(me.id) ||
         (p.reactions.noted || []).includes(me.id);
@@ -1100,13 +1100,13 @@ export default function App() {
       // 2. If connected to Supabase, sync to backend
       if (!demo && supabase && session) {
         try {
-          await supabase.auth.updateUser({ 
-            data: { 
-              full_name: trimmed, 
-              display_name: trimmed, 
+          await supabase.auth.updateUser({
+            data: {
+              full_name: trimmed,
+              display_name: trimmed,
               avatar_url: editAvatar.startsWith('data:') ? undefined : editAvatar,
-              custom_avatar: editAvatar.startsWith('data:') ? undefined : editAvatar 
-            } 
+              custom_avatar: editAvatar.startsWith('data:') ? undefined : editAvatar
+            }
           });
         } catch (err) {
           console.warn('Supabase updateUser err:', err);
@@ -1169,7 +1169,7 @@ export default function App() {
       return;
     }
     const finalTitle = title || (newPostType === 'today' ? `งานวันนี้ (${me.name})` : `ประกาศจาก ${me.name}`);
-    
+
     if (demo || !supabase || !session) {
       const newPost: FeedPost = {
         id: 'post-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
@@ -1387,7 +1387,7 @@ export default function App() {
           return a;
         });
       }
-      
+
       let nextStatus: TaskStatus = t.status;
       const allDone = updatedAssignees.length > 0 && updatedAssignees.every(a => a.completed);
       const anyDone = updatedAssignees.some(a => a.completed);
@@ -1468,7 +1468,7 @@ export default function App() {
       try {
         localStorage.setItem('prime-urgent-flash-last', JSON.stringify(broadcastObj));
         window.dispatchEvent(new CustomEvent('prime-urgent-flash', { detail: broadcastObj }));
-      } catch {}
+      } catch { }
       notify('ส่งประกาศด่วนเรียบร้อย Pop-up แจ้งทุกคนกลางหน้าจอแล้ว ⚡');
       return;
     }
@@ -1498,7 +1498,7 @@ export default function App() {
     });
   };
 
-  // Attendance Handlers (Work hours: 08:00 - 17:00)
+  // Attendance Handlers (Work hours: 09:00 - 17:00)
   async function handleCheckIn() {
     await action(async () => {
       const now = new Date();
@@ -1518,8 +1518,8 @@ export default function App() {
         if (error) throw error;
         await refresh();
       }
-      const holMsg = todayHoliday.isPublicHoliday 
-        ? ` (ทำงานวันหยุดบริษัท: ${todayHoliday.name})` 
+      const holMsg = todayHoliday.isPublicHoliday
+        ? ` (ทำงานวันหยุดบริษัท: ${todayHoliday.name})`
         : todayHoliday.isWeekend ? ' (ทำงานวันหยุดสุดสัปดาห์)' : ` (${status === 'on_time' ? 'ตรงเวลา 👍' : 'สาย'})`;
       notify(`เช็คอินเข้างานแล้ว เวลา ${formatThaiTime(now.toISOString())}${holMsg}`);
     });
@@ -1585,7 +1585,7 @@ export default function App() {
         await refresh();
       }
       setLeaveReason('');
-      const holDeduction = leaveWorkingDaysCalc.holidays.length > 0 
+      const holDeduction = leaveWorkingDaysCalc.holidays.length > 0
         ? ` (หักวันหยุดราชการ ${leaveWorkingDaysCalc.holidays.length} วัน รวมใช้วันลาจริง ${leaveWorkingDaysCalc.workingDays} วันทำการ)`
         : '';
       notify(`ยื่น${cfg.label}สำเร็จ (อนุมัติทันที) มีผล ${leaveStart === leaveEnd ? leaveStart : `${leaveStart} ถึง ${leaveEnd}`}${holDeduction}`);
@@ -1714,7 +1714,7 @@ export default function App() {
   if (!demo && (!session || !loaded)) {
     return (
       <div className="login-screen">
-        <button 
+        <button
           className="icon-button"
           onClick={toggleFullscreen}
           style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 50, background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(8px)', borderRadius: '10px' }}
@@ -1809,11 +1809,11 @@ export default function App() {
 
       {/* 2. FLOATING ROOM CARD (When clicking a room pin on canvas) */}
       {selectedRoomCard && (
-        <div 
-          className="floating-room-popover" 
-          style={{ 
-            bottom: '86px', 
-            right: page !== 'office' ? 'calc(min(720px, 94vw) + 18px)' : '24px' 
+        <div
+          className="floating-room-popover"
+          style={{
+            bottom: '86px',
+            right: page !== 'office' ? 'calc(min(720px, 94vw) + 18px)' : '24px'
           }}
         >
           {(() => {
@@ -1893,7 +1893,7 @@ export default function App() {
         </div>
 
         {todayHoliday.isCompanyHoliday ? (
-          <button 
+          <button
             type="button"
             className={`island-holiday-tag ${todayHoliday.isPublicHoliday ? 'public' : 'weekend'}`}
             onClick={() => { setPage('attendance'); setShowHolidayCalendar(true); }}
@@ -1902,7 +1902,7 @@ export default function App() {
             <span>{todayHoliday.isPublicHoliday ? `🏖️ วันหยุด: ${todayHoliday.name}` : `🛋️ ${todayHoliday.name}`}</span>
           </button>
         ) : (
-          <button 
+          <button
             type="button"
             className="island-holiday-tag weekend"
             onClick={() => { setPage('attendance'); setShowHolidayCalendar(true); }}
@@ -1941,34 +1941,34 @@ export default function App() {
         </select>
 
         <div className="island-actions">
-          <button 
+          <button
             type="button"
-            className="urgent-flash-top-btn" 
+            className="urgent-flash-top-btn"
             onClick={() => { setUrgentDraft(''); setUrgentModalOpen(true); }}
             title="ส่งประกาศด่วนถึงทุกคน (Pop-up กลางหน้าจอทันที ยกเว้นห้อง Focus Zone)"
           >
             <Zap size={14} className="flash-zap-pulse" />
             <span>ประกาศด่วน</span>
           </button>
-          <button 
-            className="icon-button bell" 
-            onClick={() => setNoticeOpen(true)} 
+          <button
+            className="icon-button bell"
+            onClick={() => setNoticeOpen(true)}
             title={me.room === 'focus' ? 'ห้อง Focus Zone: ปิดแจ้งเตือน (โหมดห้ามรบกวน)' : `การแจ้งเตือน ${incoming.length} รายการ`}
           >
             <Bell size={17} style={me.room === 'focus' ? { opacity: 0.5 } : undefined} />
             {incoming.length > 0 && <b>{incoming.length}</b>}
           </button>
-          <button 
-            className="profile-badge-btn" 
+          <button
+            className="profile-badge-btn"
             onClick={() => { setEditName(me.name); setEditAvatar(me.avatarUrl || ''); setProfileOpen(true); }}
             title="แก้ไขโปรไฟล์ของคุณ"
           >
             <Avatar member={me} small />
             <span className="my-name-tag">{me.name}</span>
           </button>
-          <button 
-            className="icon-button" 
-            onClick={toggleFullscreen} 
+          <button
+            className="icon-button"
+            onClick={toggleFullscreen}
             title={isFullscreen ? 'ย่อหน้าต่าง (Esc หรือ F11)' : 'ขยายเต็มหน้าจอโน้ตบุ๊ก (Fullscreen / F11)'}
           >
             {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
@@ -1990,9 +1990,9 @@ export default function App() {
 
       {/* 4. BOTTOM FLOATING DOCK */}
       <nav className="floating-bottom-dock">
-        <button 
-          className={`dock-btn ${page === 'office' && !selectedRoomCard ? 'active' : ''}`} 
-          onClick={() => { setPage('office'); setSelectedRoomCard(null); }} 
+        <button
+          className={`dock-btn ${page === 'office' && !selectedRoomCard ? 'active' : ''}`}
+          onClick={() => { setPage('office'); setSelectedRoomCard(null); }}
           title="ออฟฟิศของเรา (ฉากเต็มจอ)"
         >
           <Home size={19} />
@@ -2003,10 +2003,10 @@ export default function App() {
 
         {/* Voice Huddle Controller in Dock */}
         {me.room === 'focus' ? (
-          <button 
-            className="dock-btn disabled" 
-            style={{ opacity: 0.5, cursor: 'not-allowed' }} 
-            onClick={() => notify('ห้อง Focus Zone เป็นโซนเงียบ ปิดระบบเสียงและการโทร 🤫')} 
+          <button
+            className="dock-btn disabled"
+            style={{ opacity: 0.5, cursor: 'not-allowed' }}
+            onClick={() => notify('ห้อง Focus Zone เป็นโซนเงียบ ปิดระบบเสียงและการโทร 🤫')}
             title="ห้อง Focus Zone เป็นโซนเงียบ ปิดระบบเสียงและการโทร"
           >
             <MicOff size={19} color="#94a3b8" />
@@ -2039,8 +2039,8 @@ export default function App() {
         )}
 
         {/* WebRTC Video Conference Launcher */}
-        <button 
-          className={`dock-btn ${conferenceOpen ? 'active' : ''} ${me.room === 'focus' ? 'disabled' : ''}`} 
+        <button
+          className={`dock-btn ${conferenceOpen ? 'active' : ''} ${me.room === 'focus' ? 'disabled' : ''}`}
           style={me.room === 'focus' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           onClick={() => {
             if (me.room === 'focus') {
@@ -2052,7 +2052,7 @@ export default function App() {
             } else {
               void startConference(me.room);
             }
-          }} 
+          }}
           title={me.room === 'focus' ? 'ห้อง Focus Zone ไม่รองรับการประชุม (โหมดห้ามรบกวน)' : `ห้องประชุมวิดีโอห้อง ${rooms.find(r => r.id === me.room)?.name || ''}`}
         >
           <Video size={19} color={me.room === 'focus' ? '#94a3b8' : conferenceOpen ? '#38ef7d' : undefined} />
@@ -2063,9 +2063,9 @@ export default function App() {
         <div className="dock-divider" />
 
         {/* Navigation to Drawers */}
-        <button 
-          className={`dock-btn ${page === 'attendance' ? 'active' : ''}`} 
-          onClick={() => { setPage('attendance'); setSelectedRoomCard(null); }} 
+        <button
+          className={`dock-btn ${page === 'attendance' ? 'active' : ''}`}
+          onClick={() => { setPage('attendance'); setSelectedRoomCard(null); }}
           title="ระบบลงเวลาทำงาน & วันหยุดราชการ & ลางาน"
         >
           <CalendarCheck size={19} />
@@ -2073,9 +2073,9 @@ export default function App() {
           {onLeaveCount > 0 && <span className="dock-badge leave-badge">{onLeaveCount}</span>}
         </button>
 
-        <button 
-          className={`dock-btn ${page === 'team' ? 'active' : ''}`} 
-          onClick={() => { setPage('team'); setSelectedRoomCard(null); }} 
+        <button
+          className={`dock-btn ${page === 'team' ? 'active' : ''}`}
+          onClick={() => { setPage('team'); setSelectedRoomCard(null); }}
           title="สมาชิกทีมทั้งหมด"
         >
           <Users size={19} />
@@ -2083,9 +2083,9 @@ export default function App() {
           <span className="dock-badge" style={{ background: '#475569' }}>{members.length}</span>
         </button>
 
-        <button 
-          className={`dock-btn ${page === 'feed' || page === 'today' || page === 'announcements' ? 'active' : ''}`} 
-          onClick={() => { setPage('feed'); setSelectedRoomCard(null); }} 
+        <button
+          className={`dock-btn ${page === 'feed' || page === 'today' || page === 'announcements' ? 'active' : ''}`}
+          onClick={() => { setPage('feed'); setSelectedRoomCard(null); }}
           title="ฟีด & มอบหมายงานของทีม"
         >
           <ClipboardList size={19} />
@@ -2098,9 +2098,9 @@ export default function App() {
         </button>
 
         {me.isAdmin && (
-          <button 
-            className={`dock-btn ${page === 'admin' ? 'active' : ''}`} 
-            onClick={() => { setPage('admin'); setSelectedRoomCard(null); }} 
+          <button
+            className={`dock-btn ${page === 'admin' ? 'active' : ''}`}
+            onClick={() => { setPage('admin'); setSelectedRoomCard(null); }}
             title="ผู้ดูแลระบบ"
           >
             <Settings size={19} />
@@ -2127,977 +2127,977 @@ export default function App() {
             <div className="drawer-body">
               {/* PAGE: Attendance & Leave Management */}
 
-          {page === 'attendance' && (
-            <div className="attendance-page">
-              {/* Company Holiday Confirmation Banner */}
-              {todayHoliday.isCompanyHoliday ? (
-                <div className={`company-holiday-banner ${todayHoliday.isPublicHoliday ? 'public' : 'weekend'}`}>
-                  <div className="holiday-banner-badge">
-                    <span>{todayHoliday.isPublicHoliday ? '🇹🇭 วันหยุดราชการ' : '🛋️ วันหยุดสุดสัปดาห์'}</span>
-                    <span className="confirm-check">✓ ยืนยันเป็นวันหยุดบริษัท</span>
-                  </div>
-                  <div className="holiday-banner-body">
-                    <h2>{todayHoliday.isPublicHoliday ? `วันนี้เป็นวันหยุดของบริษัท: ${todayHoliday.name}` : `วันนี้เป็น${todayHoliday.name}`}</h2>
-                    <p>บริษัท ไพร์มดิจิทัลคอนซัลแทนท์ จำกัด ปฏิบัติตาม<strong>ปฏิทินวันหยุดราชการไทย ประจำปี พ.ศ. {new Date().getFullYear() + 543}</strong> ทีมงานสามารถพักผ่อนได้เต็มที่โดยไม่จำเป็นต้องเช็คอินเข้างาน</p>
-                  </div>
-                  <div className="holiday-banner-actions">
-                    <button type="button" className="text-button" onClick={() => setShowHolidayCalendar(!showHolidayCalendar)}>
-                      <CalendarCheck size={16} /> {showHolidayCalendar ? 'ซ่อนปฏิทินวันหยุด' : 'ดูปฏิทินวันหยุดราชการทั้งปี →'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="workday-banner">
-                  <div><span className="workday-dot" /><span>วันนี้เป็นวันทำงานปกติ · {formatThaiFullDate(todayDateStr)}</span></div>
-                  <button type="button" className="text-button" onClick={() => setShowHolidayCalendar(!showHolidayCalendar)}>
-                    <CalendarCheck size={15} /> {showHolidayCalendar ? 'ปิดปฏิทิน' : 'ตรวจเช็คปฏิทินวันหยุดราชการปีนี้'}
-                  </button>
-                </div>
-              )}
-
-              {/* Annual Holiday Calendar Panel */}
-              {showHolidayCalendar && (
-                <section className="panel holiday-calendar-card">
-                  <div className="holiday-calendar-header">
-                    <div>
-                      <h2>🇹🇭 ปฏิทินวันหยุดราชการของบริษัท ประจำปี พ.ศ. {selectedHolidayYear + 543} ({selectedHolidayYear})</h2>
-                      <p>อ้างอิงตามประกาศมติคณะรัฐมนตรี (ครม.) · บริษัทหยุดตามราชการทั้งหมด {yearHolidaysList.length} วัน</p>
-                    </div>
-                    <div className="year-selector-tabs">
-                      {[2025, 2026, 2027].map(y => (
-                        <button key={y} className={`year-tab ${selectedHolidayYear === y ? 'active' : ''}`} onClick={() => setSelectedHolidayYear(y)}>
-                          พ.ศ. {y + 543} ({y})
+              {page === 'attendance' && (
+                <div className="attendance-page">
+                  {/* Company Holiday Confirmation Banner */}
+                  {todayHoliday.isCompanyHoliday ? (
+                    <div className={`company-holiday-banner ${todayHoliday.isPublicHoliday ? 'public' : 'weekend'}`}>
+                      <div className="holiday-banner-badge">
+                        <span>{todayHoliday.isPublicHoliday ? '🇹🇭 วันหยุดราชการ' : '🛋️ วันหยุดสุดสัปดาห์'}</span>
+                        <span className="confirm-check">✓ ยืนยันเป็นวันหยุดบริษัท</span>
+                      </div>
+                      <div className="holiday-banner-body">
+                        <h2>{todayHoliday.isPublicHoliday ? `วันนี้เป็นวันหยุดของบริษัท: ${todayHoliday.name}` : `วันนี้เป็น${todayHoliday.name}`}</h2>
+                        <p>บริษัท ไพร์มดิจิทัลคอนซัลแทนท์ จำกัด ปฏิบัติตาม<strong>ปฏิทินวันหยุดราชการไทย ประจำปี พ.ศ. {new Date().getFullYear() + 543}</strong> ทีมงานสามารถพักผ่อนได้เต็มที่โดยไม่จำเป็นต้องเช็คอินเข้างาน</p>
+                      </div>
+                      <div className="holiday-banner-actions">
+                        <button type="button" className="text-button" onClick={() => setShowHolidayCalendar(!showHolidayCalendar)}>
+                          <CalendarCheck size={16} /> {showHolidayCalendar ? 'ซ่อนปฏิทินวันหยุด' : 'ดูปฏิทินวันหยุดราชการทั้งปี →'}
                         </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="holiday-grid-list">
-                    {yearHolidaysList.map(h => {
-                      const isPast = h.date < todayDateStr;
-                      const isCurrent = h.date === todayDateStr;
-                      return (
-                        <div key={h.date} className={`holiday-row-card ${isCurrent ? 'today' : ''} ${isPast ? 'past' : ''}`}>
-                          <div className="holiday-date-col">
-                            <span className="holiday-date-num">{h.date.split('-')[2]}</span>
-                            <span className="holiday-date-mo">{THAI_MONTH_NAMES[Number(h.date.split('-')[1]) - 1]}</span>
-                          </div>
-                          <div className="holiday-info-col">
-                            <strong>{h.name}</strong>
-                            <small>{h.thaiDate} {h.isSubstitute ? ' · (วันหยุดชดเชย)' : ''}</small>
-                          </div>
-                          <div className="holiday-tag-col">
-                            {isCurrent ? <span className="holiday-tag-status active">🎉 วันนี้</span> : isPast ? <span className="holiday-tag-status past">ผ่านไปแล้ว</span> : <span className="holiday-tag-status future">วันหยุดบริษัท</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
-
-              {/* Daily KPI Dashboard */}
-              <div className="att-kpi-grid">
-                <div className="kpi-card">
-                  <div className="kpi-icon blue"><Users size={22} /></div>
-                  <div>
-                    <small>สมาชิกทั้งหมด</small>
-                    <strong>{members.length} คน</strong>
-                    <span className="kpi-sub">ไพร์มดิจิทัลคอนซัลแทนท์</span>
-                  </div>
-                </div>
-                <div className="kpi-card">
-                  <div className="kpi-icon green"><CheckCircle2 size={22} /></div>
-                  <div>
-                    <small>เช็คอินเข้างานแล้ว</small>
-                    <strong>{checkedInCount} คน</strong>
-                    <span className="kpi-sub">{Math.round((checkedInCount / members.length) * 100)}% ของทั้งทีม</span>
-                  </div>
-                </div>
-                <div className="kpi-card">
-                  <div className="kpi-icon amber"><Clock size={22} /></div>
-                  <div>
-                    <small>ตรงเวลา / สาย</small>
-                    <strong>{onTimeCount} <span className="kpi-divider">/</span> <span className="kpi-warn">{lateCount}</span></strong>
-                    <span className="kpi-sub">เกณฑ์เวลา 08:00 น.</span>
-                  </div>
-                </div>
-                <div className="kpi-card">
-                  <div className="kpi-icon purple"><CalendarCheck size={22} /></div>
-                  <div>
-                    <small>ลางานวันนี้</small>
-                    <strong>{onLeaveCount} คน</strong>
-                    <span className="kpi-sub">อนุมัติอัตโนมัติ</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="att-layout-grid">
-                {/* Left Column: My Action & Leave Submission */}
-                <div className="att-left-col">
-                  {/* My Attendance Card */}
-                  <section className="panel att-box">
-                    <div className="att-box-header">
-                      <div>
-                        <h2><Clock size={20} />การลงเวลาของคุณวันนี้</h2>
-                        <p>เวลาทำการมาตรฐานบริษัท: <strong>08:00 - 17:00 น.</strong></p>
-                      </div>
-                      <div className="live-clock-badge">
-                        <span className="tiny-dot" />
-                        <span>{nowTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.</span>
                       </div>
                     </div>
-
-                    <div className="my-att-summary-card">
-                      <div className="att-time-cell">
-                        <small>เวลาเข้างาน</small>
-                        <strong>{todayMyAttendance ? formatThaiTime(todayMyAttendance.check_in_at) : '—'}</strong>
-                        {todayMyAttendance && (
-                          <span className={`status-tag ${todayMyAttendance.status}`}>
-                            {todayMyAttendance.status === 'on_time' ? '✓ ตรงเวลา' : '⚠ มาสาย'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="att-time-divider" />
-                      <div className="att-time-cell">
-                        <small>เวลาออกงาน</small>
-                        <strong>{todayMyAttendance?.check_out_at ? formatThaiTime(todayMyAttendance.check_out_at) : '—'}</strong>
-                        {todayMyAttendance?.check_out_at ? (
-                          <span className="status-tag finished">✓ บันทึกแล้ว</span>
-                        ) : (
-                          <span className="status-tag in-progress">กำลังทำงาน</span>
-                        )}
-                      </div>
-                      <div className="att-time-divider" />
-                      <div className="att-time-cell">
-                        <small>รวมเวลาทำงาน</small>
-                        <strong>{todayMyAttendance ? formatDuration(todayMyAttendance.check_in_at, todayMyAttendance.check_out_at) : '—'}</strong>
-                        <span className="sub-hint">เป้าหมาย 8 ชม.</span>
-                      </div>
-                    </div>
-
-                    <div className="att-actions-row">
-                      {!todayMyAttendance ? (
-                        <button className="primary att-btn-lg" onClick={handleCheckIn} disabled={busy}>
-                          <Clock size={18} />เช็คอินเข้างาน (เริ่ม 08:00 น.)
-                        </button>
-                      ) : !todayMyAttendance.check_out_at ? (
-                        <button className="primary att-btn-lg checkout" onClick={handleCheckOut} disabled={busy}>
-                          <CheckCircle2 size={18} />เช็คเอาท์เลิกงาน (17:00 น.)
-                        </button>
-                      ) : (
-                        <div className="att-done-banner">
-                          <CheckCircle2 size={18} color="#2b7a5a" />
-                          <span>คุณลงเวลาเข้าและออกงานของวันนี้เรียบร้อยแล้ว พักผ่อนให้เต็มที่ครับ!</span>
-                        </div>
-                      )}
-                    </div>
-                  </section>
-
-                  {/* Leave Request Form (Instant Approval Mode 1) */}
-                  <section className="panel att-box">
-                    <div className="att-box-header">
-                      <div>
-                        <h2><CalendarCheck size={20} />ยื่นคำขอลางาน</h2>
-                        <p>อนุมัติทันทีเพื่อความคล่องตัว สถานะจะขึ้นบนผังออฟฟิศอัตโนมัติ</p>
-                      </div>
-                    </div>
-
-                    <form className="leave-form" onSubmit={handleLeaveSubmit}>
-                      <div className="form-group">
-                        <label>ประเภทการลา</label>
-                        <div className="leave-type-selector">
-                          {(Object.keys(leaveTypesConfig) as LeaveType[]).map(t => {
-                            const cfg = leaveTypesConfig[t];
-                            return (
-                              <button
-                                type="button"
-                                key={t}
-                                className={`leave-type-chip ${leaveType === t ? 'active' : ''}`}
-                                onClick={() => setLeaveType(t)}
-                              >
-                                <span className="chip-emoji">{cfg.emoji}</span>
-                                <span className="chip-label">{cfg.label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="form-row">
-                        <div className="form-group">
-                          <label>วันที่เริ่มต้น</label>
-                          <input 
-                            type="date" 
-                            required 
-                            value={leaveStart} 
-                            onChange={e => {
-                              setLeaveStart(e.target.value);
-                              if (leaveEnd < e.target.value) setLeaveEnd(e.target.value);
-                            }} 
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>วันที่สิ้นสุด</label>
-                          <input 
-                            type="date" 
-                            required 
-                            min={leaveStart} 
-                            value={leaveEnd} 
-                            onChange={e => setLeaveEnd(e.target.value)} 
-                          />
-                        </div>
-                      </div>
-
-                      <div className="form-group">
-                        <label>ช่วงเวลา</label>
-                        <select value={leavePeriod} onChange={e => setLeavePeriod(e.target.value as any)}>
-                          {Object.entries(periodLabels).map(([k, v]) => (
-                            <option key={k} value={k}>{v}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <label>เหตุผล / รายละเอียด (ระบุสั้นๆ)</label>
-                        <input 
-                          type="text" 
-                          maxLength={300} 
-                          value={leaveReason} 
-                          onChange={e => setLeaveReason(e.target.value)} 
-                          placeholder="เช่น พบแพทย์โรงพยาบาล, ติดต่อธุระราชการ, นัดหมายด่วน…" 
-                        />
-                      </div>
-
-                      {/* Working Days & Company Holiday Deduction Calculator */}
-                      <div className="leave-calc-box">
-                        <div className="calc-summary">
-                          <span>ระยะเวลาที่เลือก: <strong>{leaveWorkingDaysCalc.totalDays} วัน</strong></span>
-                          <span>•</span>
-                          <span>วันหยุดบริษัท/เสาร์-อาทิตย์: <strong className="text-amber">{leaveWorkingDaysCalc.holidays.length} วัน</strong></span>
-                          <span>•</span>
-                          <span>ใช้วันลาจริง: <strong className="text-green">{leaveWorkingDaysCalc.workingDays} วันทำการ</strong></span>
-                        </div>
-                        {leaveWorkingDaysCalc.holidays.length > 0 && (
-                          <div className="calc-holiday-tags">
-                            <small>วันหยุดราชการของบริษัทที่ไม่นับเป็นวันลา (หยุดตามราชการ):</small>
-                            <div className="holiday-chip-row">
-                              {leaveWorkingDaysCalc.holidays.map(h => (
-                                <span key={h.date} className="holiday-chip" title={h.name}>
-                                  🏖️ {h.date}: {h.name}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {leaveWorkingDaysCalc.workingDays === 0 && leaveWorkingDaysCalc.totalDays > 0 && (
-                          <div className="calc-zero-alert">
-                            💡 ทุกวันที่เลือกเป็นวันหยุดของบริษัทอยู่แล้ว (หยุดตามราชการ) ไม่เสียโควตาวันลา
-                          </div>
-                        )}
-                      </div>
-
-                      <button type="submit" className="primary" disabled={busy}>
-                        <Plus size={16} />ยื่นการลา (มีผลทันที)
+                  ) : (
+                    <div className="workday-banner">
+                      <div><span className="workday-dot" /><span>วันนี้เป็นวันทำงานปกติ · {formatThaiFullDate(todayDateStr)}</span></div>
+                      <button type="button" className="text-button" onClick={() => setShowHolidayCalendar(!showHolidayCalendar)}>
+                        <CalendarCheck size={15} /> {showHolidayCalendar ? 'ปิดปฏิทิน' : 'ตรวจเช็คปฏิทินวันหยุดราชการปีนี้'}
                       </button>
-                    </form>
+                    </div>
+                  )}
 
-                    {/* My Recent Leaves */}
-                    <div className="my-leaves-history">
-                      <div className="section-label">
-                        <span>ประวัติการลาของคุณ</span>
-                        <small>{leavesList.filter(l => l.user_id === me.id).length} รายการ</small>
-                      </div>
-                      <div className="leave-history-list">
-                        {leavesList.filter(l => l.user_id === me.id).length === 0 ? (
-                          <p className="empty-inline">ยังไม่มีประวัติการลา</p>
-                        ) : leavesList.filter(l => l.user_id === me.id).map(l => (
-                          <div key={l.id} className="leave-item-row">
-                            <span className="leave-item-icon">{leaveTypesConfig[l.leave_type]?.emoji || '📋'}</span>
-                            <div className="leave-item-body">
-                              <strong>
-                                {leaveTypesConfig[l.leave_type]?.label}
-                                <span className="period-tag">{periodLabels[l.period] || l.period}</span>
-                              </strong>
-                              <small>
-                                {l.start_date === l.end_date ? l.start_date : `${l.start_date} ถึง ${l.end_date}`}
-                                {l.reason ? ` · ${l.reason}` : ''}
-                              </small>
-                            </div>
-                            <button 
-                              className="icon-button" 
-                              title="ยกเลิกการลา" 
-                              onClick={() => void handleCancelLeave(l.id)}
-                            >
-                              <Trash2 size={15} color="#9aa7ae" />
+                  {/* Annual Holiday Calendar Panel */}
+                  {showHolidayCalendar && (
+                    <section className="panel holiday-calendar-card">
+                      <div className="holiday-calendar-header">
+                        <div>
+                          <h2>🇹🇭 ปฏิทินวันหยุดราชการของบริษัท ประจำปี พ.ศ. {selectedHolidayYear + 543} ({selectedHolidayYear})</h2>
+                          <p>อ้างอิงตามประกาศมติคณะรัฐมนตรี (ครม.) · บริษัทหยุดตามราชการทั้งหมด {yearHolidaysList.length} วัน</p>
+                        </div>
+                        <div className="year-selector-tabs">
+                          {[2025, 2026, 2027].map(y => (
+                            <button key={y} className={`year-tab ${selectedHolidayYear === y ? 'active' : ''}`} onClick={() => setSelectedHolidayYear(y)}>
+                              พ.ศ. {y + 543} ({y})
                             </button>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  </section>
-                </div>
-
-                {/* Right Column: Team Attendance & Leaves Today */}
-                <div className="att-right-col">
-                  <section className="panel att-box">
-                    <div className="att-box-header">
-                      <div>
-                        <h2><Users size={20} />สถานะการเข้างานของทีมวันนี้</h2>
-                        <p>ประจำวัน {new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                      </div>
-                    </div>
-
-                    {/* Filter chips */}
-                    <div className="att-filter-bar">
-                      <button className={`chip-btn ${teamFilter === 'all' ? 'active' : ''}`} onClick={() => setTeamFilter('all')}>
-                        ทั้งหมด ({members.length})
-                      </button>
-                      <button className={`chip-btn ${teamFilter === 'present' ? 'active' : ''}`} onClick={() => setTeamFilter('present')}>
-                        เข้างานแล้ว ({checkedInCount})
-                      </button>
-                      <button className={`chip-btn ${teamFilter === 'late' ? 'active' : ''}`} onClick={() => setTeamFilter('late')}>
-                        สาย ({lateCount})
-                      </button>
-                      <button className={`chip-btn ${teamFilter === 'leave' ? 'active' : ''}`} onClick={() => setTeamFilter('leave')}>
-                        ลางาน ({onLeaveCount})
-                      </button>
-                      <button className={`chip-btn ${teamFilter === 'not_in' ? 'active' : ''}`} onClick={() => setTeamFilter('not_in')}>
-                        ยังไม่เช็คอิน ({members.length - checkedInCount - onLeaveCount})
-                      </button>
-                    </div>
-
-                    {/* Team Members Attendance Table */}
-                    <div className="team-att-table">
-                      {filteredMembers.map(({ member: m, att, leave }) => (
-                        <div key={m.id} className="team-att-row">
-                          <div className="team-att-user">
-                            <Avatar member={m} small />
-                            <div>
-                              <strong>{m.name}{m.id === me.id ? ' (คุณ)' : ''}</strong>
-                              <small>{m.role}</small>
-                            </div>
-                          </div>
-
-                          <div className="team-att-status">
-                            {leave ? (
-                              <span className="badge-leave" title={leave.reason || leaveTypesConfig[leave.leave_type]?.label}>
-                                {leaveTypesConfig[leave.leave_type]?.emoji} {leaveTypesConfig[leave.leave_type]?.label} ({periodLabels[leave.period]?.split(' ')[0]})
-                              </span>
-                            ) : att ? (
-                              <div className="checkin-info">
-                                <span className={`badge-time ${att.status}`}>
-                                  {att.status === 'on_time' ? '🟢 ตรงเวลา' : '🟡 สาย'} {formatThaiTime(att.check_in_at)}
-                                </span>
-                                {att.check_out_at && (
-                                  <small className="checkout-time">ออก {formatThaiTime(att.check_out_at)}</small>
-                                )}
+                      <div className="holiday-grid-list">
+                        {yearHolidaysList.map(h => {
+                          const isPast = h.date < todayDateStr;
+                          const isCurrent = h.date === todayDateStr;
+                          return (
+                            <div key={h.date} className={`holiday-row-card ${isCurrent ? 'today' : ''} ${isPast ? 'past' : ''}`}>
+                              <div className="holiday-date-col">
+                                <span className="holiday-date-num">{h.date.split('-')[2]}</span>
+                                <span className="holiday-date-mo">{THAI_MONTH_NAMES[Number(h.date.split('-')[1]) - 1]}</span>
                               </div>
-                            ) : (
-                              <span className="badge-not-in">⚪ ยังไม่เช็คอิน</span>
+                              <div className="holiday-info-col">
+                                <strong>{h.name}</strong>
+                                <small>{h.thaiDate} {h.isSubstitute ? ' · (วันหยุดชดเชย)' : ''}</small>
+                              </div>
+                              <div className="holiday-tag-col">
+                                {isCurrent ? <span className="holiday-tag-status active">🎉 วันนี้</span> : isPast ? <span className="holiday-tag-status past">ผ่านไปแล้ว</span> : <span className="holiday-tag-status future">วันหยุดบริษัท</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Daily KPI Dashboard */}
+                  <div className="att-kpi-grid">
+                    <div className="kpi-card">
+                      <div className="kpi-icon blue"><Users size={22} /></div>
+                      <div>
+                        <small>สมาชิกทั้งหมด</small>
+                        <strong>{members.length} คน</strong>
+                        <span className="kpi-sub">ไพร์มดิจิทัลคอนซัลแทนท์</span>
+                      </div>
+                    </div>
+                    <div className="kpi-card">
+                      <div className="kpi-icon green"><CheckCircle2 size={22} /></div>
+                      <div>
+                        <small>เช็คอินเข้างานแล้ว</small>
+                        <strong>{checkedInCount} คน</strong>
+                        <span className="kpi-sub">{Math.round((checkedInCount / members.length) * 100)}% ของทั้งทีม</span>
+                      </div>
+                    </div>
+                    <div className="kpi-card">
+                      <div className="kpi-icon amber"><Clock size={22} /></div>
+                      <div>
+                        <small>ตรงเวลา / สาย</small>
+                        <strong>{onTimeCount} <span className="kpi-divider">/</span> <span className="kpi-warn">{lateCount}</span></strong>
+                        <span className="kpi-sub">เกณฑ์เวลา 09:00 น.</span>
+                      </div>
+                    </div>
+                    <div className="kpi-card">
+                      <div className="kpi-icon purple"><CalendarCheck size={22} /></div>
+                      <div>
+                        <small>ลางานวันนี้</small>
+                        <strong>{onLeaveCount} คน</strong>
+                        <span className="kpi-sub">อนุมัติอัตโนมัติ</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="att-layout-grid">
+                    {/* Left Column: My Action & Leave Submission */}
+                    <div className="att-left-col">
+                      {/* My Attendance Card */}
+                      <section className="panel att-box">
+                        <div className="att-box-header">
+                          <div>
+                            <h2><Clock size={20} />การลงเวลาของคุณวันนี้</h2>
+                            <p>เวลาทำการมาตรฐานบริษัท: <strong>09:00 - 17:00 น.</strong></p>
+                          </div>
+                          <div className="live-clock-badge">
+                            <span className="tiny-dot" />
+                            <span>{nowTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} น.</span>
+                          </div>
+                        </div>
+
+                        <div className="my-att-summary-card">
+                          <div className="att-time-cell">
+                            <small>เวลาเข้างาน</small>
+                            <strong>{todayMyAttendance ? formatThaiTime(todayMyAttendance.check_in_at) : '—'}</strong>
+                            {todayMyAttendance && (
+                              <span className={`status-tag ${todayMyAttendance.status}`}>
+                                {todayMyAttendance.status === 'on_time' ? '✓ ตรงเวลา' : '⚠ มาสาย'}
+                              </span>
                             )}
                           </div>
-
-                          <div className="team-att-room">
-                            <small>{rooms.find(r => r.id === m.room)?.name}</small>
+                          <div className="att-time-divider" />
+                          <div className="att-time-cell">
+                            <small>เวลาออกงาน</small>
+                            <strong>{todayMyAttendance?.check_out_at ? formatThaiTime(todayMyAttendance.check_out_at) : '—'}</strong>
+                            {todayMyAttendance?.check_out_at ? (
+                              <span className="status-tag finished">✓ บันทึกแล้ว</span>
+                            ) : (
+                              <span className="status-tag in-progress">กำลังทำงาน</span>
+                            )}
+                          </div>
+                          <div className="att-time-divider" />
+                          <div className="att-time-cell">
+                            <small>รวมเวลาทำงาน</small>
+                            <strong>{todayMyAttendance ? formatDuration(todayMyAttendance.check_in_at, todayMyAttendance.check_out_at) : '—'}</strong>
+                            <span className="sub-hint">เป้าหมาย 8 ชม.</span>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* PAGE: Team Members */}
-          {page === 'team' && (
-            <div className="team-grid">
-              {members.map(m => (
-                <article className="member-card" key={m.id}>
-                  <Avatar member={m} />
-                  <div>
-                    <h3>
-                      {m.name}{m.id === me.id ? ' (คุณ)' : ''}
-                      {m.leaveToday && <span className="member-leave-tag">{m.leaveToday.emoji} {m.leaveToday.label}</span>}
-                    </h3>
-                    <p>{m.role}</p>
-                    <small>
-                      {m.leaveToday ? `ลางานวันนี้ (${m.leaveToday.label})` : (m.online ? `${statuses[m.status]} · ${rooms.find(r => r.id === m.room)?.name}` : 'ออฟไลน์')}
-                    </small>
-                  </div>
-                  {m.id !== me.id && (
-                    m.room === 'focus' ? (
-                      <span className="focus-zone-badge-tag" title="เพื่อนกำลังโฟกัสการทำงานอยู่ กรุณาโทรมือถือไปหาแทนหากมีงานด่วน">
-                        🤫 โฟกัสงาน (โทรหาหากด่วน)
-                      </span>
-                    ) : (
-                      <button className="secondary" disabled={!m.online || Boolean(m.leaveToday)} onClick={() => setKnockTarget(m)}>
-                        <Hand size={16} />ขอคุย
-                      </button>
-                    )
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
+                        <div className="att-actions-row">
+                          {!todayMyAttendance ? (
+                            <button className="primary att-btn-lg" onClick={handleCheckIn} disabled={busy}>
+                              <Clock size={18} />เช็คอินเข้างาน (เริ่ม 09:00 น.)
+                            </button>
+                          ) : !todayMyAttendance.check_out_at ? (
+                            <button className="primary att-btn-lg checkout" onClick={handleCheckOut} disabled={busy}>
+                              <CheckCircle2 size={18} />เช็คเอาท์เลิกงาน (17:00 น.)
+                            </button>
+                          ) : (
+                            <div className="att-done-banner">
+                              <CheckCircle2 size={18} color="#2b7a5a" />
+                              <span>คุณลงเวลาเข้าและออกงานของวันนี้เรียบร้อยแล้ว พักผ่อนให้เต็มที่ครับ!</span>
+                            </div>
+                          )}
+                        </div>
+                      </section>
 
-          {/* PAGE: Unified Feed (Today Work + Announcements) */}
-          {(page === 'feed' || page === 'today' || page === 'announcements') && (
-            <div className="feed-container">
-              {/* 1. Filter Tabs */}
-              <div className="feed-filter-tabs">
-                <button 
-                  type="button" 
-                  className={`feed-tab-btn ${feedSubTab === 'tasks' ? 'active' : ''}`}
-                  onClick={() => setFeedSubTab('tasks')}
-                >
-                  <CheckSquare size={13} style={{ marginRight: '4px' }} />
-                  <span>📋 มอบหมายงาน</span>
-                  <span style={{ opacity: 0.85 }}>({tasks.length})</span>
-                  {myPendingTasksCount > 0 && (
-                    <span style={{ background: '#2563eb', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>
-                      {myPendingTasksCount} งานของคุณ
-                    </span>
-                  )}
-                </button>
-                <button 
-                  type="button" 
-                  className={`feed-tab-btn ${feedSubTab === 'feed' && feedFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => { setFeedSubTab('feed'); setFeedFilter('all'); }}
-                >
-                  <span>ฟีดทั้งหมด</span>
-                  <span style={{ opacity: 0.8 }}>({feedPosts.length})</span>
-                  {unreadFeedCount > 0 && (
-                    <span style={{ background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>
-                      {unreadFeedCount} รอรับทราบ
-                    </span>
-                  )}
-                </button>
-                <button 
-                  type="button" 
-                  className={`feed-tab-btn ${feedSubTab === 'feed' && feedFilter === 'today' ? 'active' : ''}`}
-                  onClick={() => { setFeedSubTab('feed'); setFeedFilter('today'); }}
-                >
-                  <span>💼 งานวันนี้</span>
-                  <span style={{ opacity: 0.8 }}>({feedPosts.filter(p => p.type === 'today').length})</span>
-                </button>
-                <button 
-                  type="button" 
-                  className={`feed-tab-btn ${feedSubTab === 'feed' && feedFilter === 'announcement' ? 'active' : ''}`}
-                  onClick={() => { setFeedSubTab('feed'); setFeedFilter('announcement'); }}
-                >
-                  <span>📢 เรื่องประกาศ</span>
-                  <span style={{ opacity: 0.8 }}>({feedPosts.filter(p => p.type === 'announcement').length})</span>
-                </button>
-              </div>
+                      {/* Leave Request Form (Instant Approval Mode 1) */}
+                      <section className="panel att-box">
+                        <div className="att-box-header">
+                          <div>
+                            <h2><CalendarCheck size={20} />ยื่นคำขอลางาน</h2>
+                            <p>อนุมัติทันทีเพื่อความคล่องตัว สถานะจะขึ้นบนผังออฟฟิศอัตโนมัติ</p>
+                          </div>
+                        </div>
 
-              {feedSubTab === 'tasks' ? (
-                <div className="task-system-wrapper">
-                  {/* KPI Summary Cards */}
-                  <div className="task-summary-row">
-                    <div className="task-kpi-card">
-                      <div className="task-kpi-icon blue"><ClipboardList size={18} /></div>
-                      <div className="task-kpi-text">
-                        <small>งานทั้งหมด</small>
-                        <strong>{tasks.length}</strong>
-                      </div>
-                    </div>
-                    <div className="task-kpi-card">
-                      <div className="task-kpi-icon amber"><Clock size={18} /></div>
-                      <div className="task-kpi-text">
-                        <small>รอดำเนินการ</small>
-                        <strong>{tasks.filter(t => t.status !== 'done').length}</strong>
-                      </div>
-                    </div>
-                    <div className="task-kpi-card">
-                      <div className="task-kpi-icon red"><AlertTriangle size={18} /></div>
-                      <div className="task-kpi-text">
-                        <small>ส่งวันนี้/เกินกำหนด</small>
-                        <strong>{urgentDeadlinesCount}</strong>
-                      </div>
-                    </div>
-                    <div className="task-kpi-card">
-                      <div className="task-kpi-icon green"><CheckCircle2 size={18} /></div>
-                      <div className="task-kpi-text">
-                        <small>เสร็จสมบูรณ์</small>
-                        <strong>{tasks.filter(t => t.status === 'done').length}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Task Action Bar: Filters + Assign Task Button */}
-                  <div className="task-action-bar">
-                    <div className="task-filter-chips">
-                      {[
-                        { id: 'all', label: 'ทั้งหมด' },
-                        { id: 'assigned_to_me', label: `งานที่มอบให้ฉัน (${tasks.filter(t => t.assignees.some(a => a.id === me.id)).length})` },
-                        { id: 'created_by_me', label: 'งานที่ฉันมอบหมาย' },
-                        { id: 'pending', label: 'ยังไม่เสร็จ' },
-                        { id: 'completed', label: 'เสร็จแล้ว' }
-                      ].map(filter => (
-                        <button
-                          type="button"
-                          key={filter.id}
-                          className={`task-filter-btn ${taskFilter === filter.id ? 'active' : ''}`}
-                          onClick={() => setTaskFilter(filter.id as any)}
-                        >
-                          {filter.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      className="primary create-task-trigger-btn"
-                      onClick={() => {
-                        setTaskTitleDraft('');
-                        setTaskDescDraft('');
-                        setTaskDueDateDraft(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
-                        setTaskDueTimeDraft('17:00');
-                        setTaskPriorityDraft('normal');
-                        setTaskAssigneesDraft([me.id]);
-                        setTaskModalOpen(true);
-                      }}
-                    >
-                      <Plus size={15} /> มอบหมายงานใหม่
-                    </button>
-                  </div>
-
-                  {/* Task Cards List */}
-                  <div className="task-cards-list">
-                    {filteredTasks.length === 0 ? (
-                      <div className="task-empty-state">
-                        <div className="empty-icon-circle">📋</div>
-                        <h3>ไม่มีรายการงานในหมวดหมู่นี้</h3>
-                        <p>คุณสามารถคลิก "มอบหมายงานใหม่" ด้านบนเพื่อเริ่มมอบหมายงานให้เพื่อนร่วมทีมหรือตัวเองได้ทันที</p>
-                      </div>
-                    ) : (
-                      filteredTasks.map(task => {
-                        const deadline = getDeadlineStatus(task.dueDate, task.dueTime, task.status);
-                        const isCreator = task.creatorId === me.id;
-                        const completedAssigneesCount = task.assignees.filter(a => a.completed).length;
-
-                        return (
-                          <article className={`task-card-item ${task.status} ${task.priority}`} key={task.id}>
-                            <div className="task-card-header">
-                              <div className="task-header-tags">
-                                <span className={`task-priority-tag ${task.priority}`}>
-                                  {task.priority === 'urgent' ? '⚡ ด่วนมาก' : task.priority === 'normal' ? '📌 ปกติ' : '☕ ไม่ด่วน'}
-                                </span>
-                                <span className={`task-deadline-tag ${deadline.type}`}>
-                                  <Clock size={12} />
-                                  <span>{deadline.text}</span>
-                                </span>
-                                <span className={`task-status-tag ${task.status}`}>
-                                  {task.status === 'done' ? '✅ เสร็จสิ้น' : task.status === 'in_progress' ? '⏳ กำลังทำ' : '📋 รอเริ่มงาน'}
-                                </span>
-                              </div>
-
-                              <div className="task-header-actions">
-                                {(isCreator || me.isAdmin) && (
+                        <form className="leave-form" onSubmit={handleLeaveSubmit}>
+                          <div className="form-group">
+                            <label>ประเภทการลา</label>
+                            <div className="leave-type-selector">
+                              {(Object.keys(leaveTypesConfig) as LeaveType[]).map(t => {
+                                const cfg = leaveTypesConfig[t];
+                                return (
                                   <button
                                     type="button"
-                                    className="task-delete-icon-btn"
-                                    onClick={() => handleDeleteTask(task.id)}
-                                    title="ลบงานที่มอบหมายนี้"
+                                    key={t}
+                                    className={`leave-type-chip ${leaveType === t ? 'active' : ''}`}
+                                    onClick={() => setLeaveType(t)}
                                   >
-                                    <Trash2 size={14} />
+                                    <span className="chip-emoji">{cfg.emoji}</span>
+                                    <span className="chip-label">{cfg.label}</span>
                                   </button>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="task-card-body">
-                              <h3>{task.title}</h3>
-                              {task.description && <p>{task.description}</p>}
-                            </div>
-
-                            <div className="task-card-creator">
-                              <span className="creator-label">ผู้มอบหมาย:</span>
-                              <span className="creator-badge">
-                                {task.creatorAvatar ? <span className="creator-av-icon">{task.creatorAvatar}</span> : '👤'}
-                                <strong>{task.creatorName}</strong>
-                              </span>
-                              <small className="creator-time">· {formatPostTime(task.createdAt)}</small>
-                            </div>
-
-                            {/* Multi-Assignee Progress & Interactive Checklist */}
-                            <div className="task-assignees-container">
-                              <div className="task-assignees-heading">
-                                <span>ผู้รับผิดชอบงาน ({completedAssigneesCount}/{task.assignees.length} คนส่งงานแล้ว):</span>
-                                {task.assignees.length > 0 && (
-                                  <div className="assignee-progress-bar">
-                                    <div 
-                                      className="assignee-progress-fill" 
-                                      style={{ width: `${(completedAssigneesCount / task.assignees.length) * 100}%` }} 
-                                    />
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="task-assignees-pills-grid">
-                                {task.assignees.map(a => {
-                                  const isMe = a.id === me.id;
-                                  return (
-                                    <div className={`assignee-pill-row ${a.completed ? 'completed' : 'pending'}`} key={a.id}>
-                                      <div className="assignee-pill-left">
-                                        {a.avatar ? <span className="assignee-pill-avatar">{a.avatar}</span> : <span className="assignee-pill-avatar">👤</span>}
-                                        <span className="assignee-pill-name">{a.name}{isMe ? ' (คุณ)' : ''}</span>
-                                      </div>
-                                      {isMe ? (
-                                        <button
-                                          type="button"
-                                          className={`assignee-toggle-check-btn ${a.completed ? 'is-done' : 'is-todo'}`}
-                                          onClick={() => handleToggleAssigneeDone(task.id)}
-                                          title={a.completed ? "คุณส่งงานแล้ว (คลิกเพื่อยกเลิก)" : "คลิกเพื่อส่งมอบงานของคุณ"}
-                                        >
-                                          {a.completed ? (
-                                            <>
-                                              <CheckCircle2 size={13} color="#059669" />
-                                              <span>ส่งงานแล้ว ✓</span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <Square size={13} color="#64748b" />
-                                              <span>คลิกส่งงาน</span>
-                                            </>
-                                          )}
-                                        </button>
-                                      ) : (
-                                        <span className={`assignee-static-badge ${a.completed ? 'done' : 'todo'}`}>
-                                          {a.completed ? '✓ ส่งแล้ว' : '⏳ รอส่งงาน'}
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </article>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* 2. Composer Card (Open to all members) */}
-                  <div className="feed-composer-card">
-                    <form onSubmit={handleCreatePost}>
-                  <div className="feed-composer-header">
-                    <div className="feed-author-meta">
-                      <Avatar member={me} small />
-                      <div className="feed-author-text">
-                        <strong>{me.name}</strong>
-                        <small>แชร์ให้เพื่อนร่วมทีม</small>
-                      </div>
-                    </div>
-                    <div className="feed-type-selector">
-                      <button 
-                        type="button" 
-                        className={`type-pill-btn today ${newPostType === 'today' ? 'active today' : ''}`}
-                        onClick={() => setNewPostType('today')}
-                      >
-                        💼 งานวันนี้
-                      </button>
-                      <button 
-                        type="button" 
-                        className={`type-pill-btn announcement ${newPostType === 'announcement' ? 'active announcement' : ''}`}
-                        onClick={() => setNewPostType('announcement')}
-                      >
-                        📢 เรื่องประกาศ
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: '10px' }}>
-                    <input 
-                      type="text" 
-                      placeholder={newPostType === 'today' ? "หัวข้องานวันนี้ (เช่น พัฒนาฟีเจอร์, เตรียมเอกสาร...)" : "หัวข้อเรื่องประกาศ (เช่น นัดหมายสำคัญ, กิจกรรมทีม...)"}
-                      value={newPostTitle}
-                      onChange={e => setNewPostTitle(e.target.value)}
-                      maxLength={120}
-                      style={{ width: '100%', padding: '9px 12px', fontSize: '13px', borderRadius: '10px', border: '1px solid #cbd5e1' }}
-                    />
-                  </div>
-
-                  <div style={{ marginBottom: '12px' }}>
-                    <textarea 
-                      required
-                      rows={3}
-                      placeholder={newPostType === 'today' ? "วันนี้ทำอะไรอยู่ หรือมีเรื่องที่อยากให้ทีมช่วย?" : "พิมพ์รายละเอียดเรื่องประกาศที่ทุกคนควรรู้..."}
-                      value={newPostContent}
-                      onChange={e => setNewPostContent(e.target.value)}
-                      maxLength={1000}
-                      style={{ width: '100%', padding: '10px 12px', fontSize: '13px', borderRadius: '10px', border: '1px solid #cbd5e1', resize: 'vertical' }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button type="submit" className="primary" style={{ padding: '8px 18px', fontSize: '12px' }}>
-                      <Send size={13} style={{ marginRight: '6px' }} /> โพสต์{newPostType === 'today' ? 'งานวันนี้' : 'เรื่องประกาศ'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* 3. Feed Posts List */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {feedPosts
-                  .filter(p => feedFilter === 'all' || p.type === feedFilter)
-                  .map(post => {
-                    const isAuthor = post.authorId === me.id;
-                    const canDelete = isAuthor || me.isAdmin;
-                    const authorMember = members.find(m => m.id === post.authorId);
-                    const authorDisplayMember: Member = authorMember || {
-                      id: post.authorId,
-                      name: post.authorName,
-                      role: 'ทีม PRIME',
-                      room: 'hub',
-                      status: 'available',
-                      online: false,
-                      color: 'blue',
-                      avatarUrl: post.authorAvatar
-                    };
-
-                    const hasReacted = 
-                      (post.reactions.likes || []).includes(me.id) ||
-                      (post.reactions.claps || []).includes(me.id) ||
-                      (post.reactions.noted || []).includes(me.id);
-                    const isMyPost = post.authorId === me.id;
-
-                    return (
-                      <article className="feed-post-card" key={post.id}>
-                        {/* Post Header */}
-                        <div className="feed-post-header">
-                          <div className="feed-author-meta">
-                            <Avatar member={authorDisplayMember} small />
-                            <div className="feed-author-text">
-                              <strong>{post.authorName}</strong>
-                              <small>{formatPostTime(post.createdAt)}</small>
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {!isMyPost && !hasReacted && (
-                              <span style={{ 
-                                background: '#ef4444', 
-                                color: '#ffffff', 
-                                fontSize: '10px', 
-                                fontWeight: 700, 
-                                padding: '2px 8px', 
-                                borderRadius: '10px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px'
-                              }}>
-                                🔴 ยังไม่ได้รับทราบ
-                              </span>
-                            )}
-                            {!isMyPost && hasReacted && (
-                              <span style={{ 
-                                background: '#ecfdf5', 
-                                color: '#059669', 
-                                fontSize: '10px', 
-                                fontWeight: 600, 
-                                padding: '2px 8px', 
-                                borderRadius: '10px' 
-                              }}>
-                                ✓ รับทราบแล้ว
-                              </span>
-                            )}
-                            <span className={`feed-tag-badge ${post.type}`}>
-                              {post.type === 'today' ? '💼 งานวันนี้' : '📢 เรื่องประกาศ'}
-                            </span>
-                            {canDelete && (
-                              <button 
-                                type="button" 
-                                onClick={() => handleDeletePost(post.id)}
-                                title="ลบโพสต์นี้"
-                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Post Content */}
-                        <div className="feed-post-content">
-                          {post.title && <h3>{post.title}</h3>}
-                          <p>{post.content}</p>
-                        </div>
-
-                        {/* Reactions Bar */}
-                        <div className="feed-reaction-bar">
-                          <button 
-                            type="button"
-                            className={`reaction-btn like ${(post.reactions.likes || []).includes(me.id) ? 'active' : ''}`}
-                            onClick={() => handleToggleReaction(post.id, 'likes')}
-                            title="กดถูกใจ (Like)"
-                          >
-                            <Heart size={13} fill={(post.reactions.likes || []).includes(me.id) ? 'currentColor' : 'none'} />
-                            <span>ถูกใจ</span>
-                            {(post.reactions.likes || []).length > 0 && <strong>{(post.reactions.likes || []).length}</strong>}
-                          </button>
-
-                          <button 
-                            type="button"
-                            className={`reaction-btn clap ${(post.reactions.claps || []).includes(me.id) ? 'active' : ''}`}
-                            onClick={() => handleToggleReaction(post.id, 'claps')}
-                            title="กดเยี่ยม (Great)"
-                          >
-                            <ThumbsUp size={13} fill={(post.reactions.claps || []).includes(me.id) ? 'currentColor' : 'none'} />
-                            <span>เยี่ยม</span>
-                            {(post.reactions.claps || []).length > 0 && <strong>{(post.reactions.claps || []).length}</strong>}
-                          </button>
-
-                          <button 
-                            type="button"
-                            className={`reaction-btn noted ${(post.reactions.noted || []).includes(me.id) ? 'active' : ''}`}
-                            onClick={() => handleToggleReaction(post.id, 'noted')}
-                            title="กดรับทราบ (Noted)"
-                          >
-                            <CheckSquare size={13} />
-                            <span>รับทราบ</span>
-                            {(post.reactions.noted || []).length > 0 && <strong>{(post.reactions.noted || []).length}</strong>}
-                          </button>
-
-                          <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <MessageSquare size={13} />
-                            <span>{(post.comments || []).length} ความคิดเห็น</span>
-                          </div>
-                        </div>
-
-                        {/* Comments Section */}
-                        <div className="feed-comment-section">
-                          {(post.comments && post.comments.length > 0) && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              {post.comments.map(c => {
-                                const cMember = members.find(m => m.id === c.authorId) || {
-                                  id: c.authorId,
-                                  name: c.authorName,
-                                  role: 'ทีม PRIME',
-                                  room: 'hub',
-                                  status: 'available',
-                                  online: false,
-                                  color: 'blue',
-                                  avatarUrl: c.authorAvatar
-                                };
-                                return (
-                                  <div className="feed-comment-row" key={c.id}>
-                                    <Avatar member={cMember} small />
-                                    <div className="feed-comment-bubble">
-                                      <strong>{c.authorName}</strong>
-                                      <p>{c.content}</p>
-                                      <small>{formatPostTime(c.createdAt)}</small>
-                                    </div>
-                                  </div>
                                 );
                               })}
                             </div>
-                          )}
+                          </div>
 
-                          {/* Comment Input */}
-                          <form 
-                            className="feed-comment-input-row" 
-                            onSubmit={e => {
-                              e.preventDefault();
-                              handleAddComment(post.id);
-                            }}
-                          >
-                            <input 
+                          <div className="form-row">
+                            <div className="form-group">
+                              <label>วันที่เริ่มต้น</label>
+                              <input
+                                type="date"
+                                required
+                                value={leaveStart}
+                                onChange={e => {
+                                  setLeaveStart(e.target.value);
+                                  if (leaveEnd < e.target.value) setLeaveEnd(e.target.value);
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>วันที่สิ้นสุด</label>
+                              <input
+                                type="date"
+                                required
+                                min={leaveStart}
+                                value={leaveEnd}
+                                onChange={e => setLeaveEnd(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="form-group">
+                            <label>ช่วงเวลา</label>
+                            <select value={leavePeriod} onChange={e => setLeavePeriod(e.target.value as any)}>
+                              {Object.entries(periodLabels).map(([k, v]) => (
+                                <option key={k} value={k}>{v}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="form-group">
+                            <label>เหตุผล / รายละเอียด (ระบุสั้นๆ)</label>
+                            <input
                               type="text"
-                              placeholder="เขียนความคิดเห็นหรือตอบกลับ…"
-                              value={commentDrafts[post.id] || ''}
-                              onChange={e => setCommentDrafts({ ...commentDrafts, [post.id]: e.target.value })}
                               maxLength={300}
+                              value={leaveReason}
+                              onChange={e => setLeaveReason(e.target.value)}
+                              placeholder="เช่น พบแพทย์โรงพยาบาล, ติดต่อธุระราชการ, นัดหมายด่วน…"
                             />
-                            <button type="submit" disabled={!commentDrafts[post.id]?.trim()}>
-                              ตอบ
-                            </button>
-                          </form>
+                          </div>
+
+                          {/* Working Days & Company Holiday Deduction Calculator */}
+                          <div className="leave-calc-box">
+                            <div className="calc-summary">
+                              <span>ระยะเวลาที่เลือก: <strong>{leaveWorkingDaysCalc.totalDays} วัน</strong></span>
+                              <span>•</span>
+                              <span>วันหยุดบริษัท/เสาร์-อาทิตย์: <strong className="text-amber">{leaveWorkingDaysCalc.holidays.length} วัน</strong></span>
+                              <span>•</span>
+                              <span>ใช้วันลาจริง: <strong className="text-green">{leaveWorkingDaysCalc.workingDays} วันทำการ</strong></span>
+                            </div>
+                            {leaveWorkingDaysCalc.holidays.length > 0 && (
+                              <div className="calc-holiday-tags">
+                                <small>วันหยุดราชการของบริษัทที่ไม่นับเป็นวันลา (หยุดตามราชการ):</small>
+                                <div className="holiday-chip-row">
+                                  {leaveWorkingDaysCalc.holidays.map(h => (
+                                    <span key={h.date} className="holiday-chip" title={h.name}>
+                                      🏖️ {h.date}: {h.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {leaveWorkingDaysCalc.workingDays === 0 && leaveWorkingDaysCalc.totalDays > 0 && (
+                              <div className="calc-zero-alert">
+                                💡 ทุกวันที่เลือกเป็นวันหยุดของบริษัทอยู่แล้ว (หยุดตามราชการ) ไม่เสียโควตาวันลา
+                              </div>
+                            )}
+                          </div>
+
+                          <button type="submit" className="primary" disabled={busy}>
+                            <Plus size={16} />ยื่นการลา (มีผลทันที)
+                          </button>
+                        </form>
+
+                        {/* My Recent Leaves */}
+                        <div className="my-leaves-history">
+                          <div className="section-label">
+                            <span>ประวัติการลาของคุณ</span>
+                            <small>{leavesList.filter(l => l.user_id === me.id).length} รายการ</small>
+                          </div>
+                          <div className="leave-history-list">
+                            {leavesList.filter(l => l.user_id === me.id).length === 0 ? (
+                              <p className="empty-inline">ยังไม่มีประวัติการลา</p>
+                            ) : leavesList.filter(l => l.user_id === me.id).map(l => (
+                              <div key={l.id} className="leave-item-row">
+                                <span className="leave-item-icon">{leaveTypesConfig[l.leave_type]?.emoji || '📋'}</span>
+                                <div className="leave-item-body">
+                                  <strong>
+                                    {leaveTypesConfig[l.leave_type]?.label}
+                                    <span className="period-tag">{periodLabels[l.period] || l.period}</span>
+                                  </strong>
+                                  <small>
+                                    {l.start_date === l.end_date ? l.start_date : `${l.start_date} ถึง ${l.end_date}`}
+                                    {l.reason ? ` · ${l.reason}` : ''}
+                                  </small>
+                                </div>
+                                <button
+                                  className="icon-button"
+                                  title="ยกเลิกการลา"
+                                  onClick={() => void handleCancelLeave(l.id)}
+                                >
+                                  <Trash2 size={15} color="#9aa7ae" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </article>
-                    );
-                  })}
+                      </section>
+                    </div>
 
-                    {feedPosts.filter(p => feedFilter === 'all' || p.type === feedFilter).length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8', background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                        <ClipboardList size={36} style={{ margin: '0 auto 10px', opacity: 0.5 }} />
-                        <p style={{ margin: 0, fontSize: '13px' }}>ยังไม่มีรายการในหมวดนี้ โพสต์เป็นคนแรกได้เลย!</p>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+                    {/* Right Column: Team Attendance & Leaves Today */}
+                    <div className="att-right-col">
+                      <section className="panel att-box">
+                        <div className="att-box-header">
+                          <div>
+                            <h2><Users size={20} />สถานะการเข้างานของทีมวันนี้</h2>
+                            <p>ประจำวัน {new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                          </div>
+                        </div>
 
-          {/* PAGE: Admin Dashboard */}
-          {page === 'admin' && me.isAdmin && (
-            <div className="admin-grid">
-              <section className="panel">
-                <h2><Video size={21} />ระบบห้องประชุมวิดีโอ (WebRTC Native)</h2>
-                <p>ระบบประชุมวิดีโอแบบเปิดกล้องและแชร์หน้าจอ ทำงานในตัวแบบเสร็จสรรพ ไม่ต้องใช้ Google Meet</p>
-                <div className="setup-note" style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
-                  <p>✅ <strong>ระบบประชุมพร้อมใช้งาน:</strong> ห้องประชุมวิดีโอความละเอียดสูงพร้อมใช้งานในห้อง PRIME Hub, Project Room และ Coffee Corner (ยกเว้น Focus Zone ที่สงวนไว้เป็นโซนสมาธิส่วนตัว)</p>
-                  <p style={{ marginTop: '8px' }}>🔐 <strong>ความปลอดภัย:</strong> เข้ารหัสแบบ End-to-End P2P ส่งสัญญาณภาพและเสียงตรงระหว่างสมาชิกในห้องประชุม</p>
-                </div>
-                <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-                  <button 
-                    type="button" 
-                    className="primary" 
-                    onClick={() => { void startConference('project'); }}
-                  >
-                    <Video size={16} /> ทดสอบเปิดห้องประชุม Project Room
-                  </button>
-                </div>
-              </section>
-
-              <section className="panel">
-                <h2><ShieldCheck size={21} />อนุญาตสมาชิก</h2>
-                <p>เพิ่มรายชื่ออีเมลก่อนให้สมาชิกเข้าสู่ระบบ รองรับ 15 บัญชีที่เปิดใช้งาน</p>
-                {demo ? (
-                  <div className="setup-note">โหมดสาธิตยังไม่เพิ่มบัญชีจริง<br />เชื่อม Supabase แล้วจึงจัดการสิทธิ์สมาชิกได้</div>
-                ) : (
-                  <>
-                    <form className="admin-form" onSubmit={e => {
-                      e.preventDefault();
-                      void action(async () => {
-                        const { error } = await supabase!.rpc('admin_upsert_member', { p_email: normalizeEmail(inviteEmail), p_name: inviteName, p_active: true, p_admin: false });
-                        if (error) throw error;
-                        setInviteEmail('');
-                        setInviteName('');
-                        await loadAdmin();
-                        await refresh();
-                        notify('อนุญาตสมาชิกแล้ว ให้สมาชิกเข้าสู่ระบบด้วย Google');
-                      });
-                    }}>
-                      <label>ชื่อ<input required maxLength={80} value={inviteName} onChange={e => setInviteName(e.target.value)} /></label>
-                      <label>อีเมล Google<input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} /></label>
-                      <button disabled={busy} className="primary">เพิ่มสมาชิก</button>
-                    </form>
-                    <div className="admin-members">
-                      {adminMembers.map(m => (
-                        <div key={m.id}>
-                          <span><strong>{m.name}{m.is_admin ? ' · ผู้ดูแล' : ''}</strong><small>{m.email}</small></span>
-                          <button className="text-button" disabled={busy} onClick={() => void action(async () => {
-                            const { error } = await supabase!.rpc('admin_upsert_member', { p_email: m.email, p_name: m.name, p_active: !m.active, p_admin: m.is_admin });
-                            if (error) throw error;
-                            await loadAdmin();
-                            await refresh();
-                          })}>
-                            {m.active ? 'ปิดสิทธิ์' : 'เปิดสิทธิ์'}
+                        {/* Filter chips */}
+                        <div className="att-filter-bar">
+                          <button className={`chip-btn ${teamFilter === 'all' ? 'active' : ''}`} onClick={() => setTeamFilter('all')}>
+                            ทั้งหมด ({members.length})
+                          </button>
+                          <button className={`chip-btn ${teamFilter === 'present' ? 'active' : ''}`} onClick={() => setTeamFilter('present')}>
+                            เข้างานแล้ว ({checkedInCount})
+                          </button>
+                          <button className={`chip-btn ${teamFilter === 'late' ? 'active' : ''}`} onClick={() => setTeamFilter('late')}>
+                            สาย ({lateCount})
+                          </button>
+                          <button className={`chip-btn ${teamFilter === 'leave' ? 'active' : ''}`} onClick={() => setTeamFilter('leave')}>
+                            ลางาน ({onLeaveCount})
+                          </button>
+                          <button className={`chip-btn ${teamFilter === 'not_in' ? 'active' : ''}`} onClick={() => setTeamFilter('not_in')}>
+                            ยังไม่เช็คอิน ({members.length - checkedInCount - onLeaveCount})
                           </button>
                         </div>
-                      ))}
+
+                        {/* Team Members Attendance Table */}
+                        <div className="team-att-table">
+                          {filteredMembers.map(({ member: m, att, leave }) => (
+                            <div key={m.id} className="team-att-row">
+                              <div className="team-att-user">
+                                <Avatar member={m} small />
+                                <div>
+                                  <strong>{m.name}{m.id === me.id ? ' (คุณ)' : ''}</strong>
+                                  <small>{m.role}</small>
+                                </div>
+                              </div>
+
+                              <div className="team-att-status">
+                                {leave ? (
+                                  <span className="badge-leave" title={leave.reason || leaveTypesConfig[leave.leave_type]?.label}>
+                                    {leaveTypesConfig[leave.leave_type]?.emoji} {leaveTypesConfig[leave.leave_type]?.label} ({periodLabels[leave.period]?.split(' ')[0]})
+                                  </span>
+                                ) : att ? (
+                                  <div className="checkin-info">
+                                    <span className={`badge-time ${att.status}`}>
+                                      {att.status === 'on_time' ? '🟢 ตรงเวลา' : '🟡 สาย'} {formatThaiTime(att.check_in_at)}
+                                    </span>
+                                    {att.check_out_at && (
+                                      <small className="checkout-time">ออก {formatThaiTime(att.check_out_at)}</small>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="badge-not-in">⚪ ยังไม่เช็คอิน</span>
+                                )}
+                              </div>
+
+                              <div className="team-att-room">
+                                <small>{rooms.find(r => r.id === m.room)?.name}</small>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
                     </div>
-                  </>
-                )}
-              </section>
-            </div>
-          )}
+                  </div>
+                </div>
+              )}
+
+              {/* PAGE: Team Members */}
+              {page === 'team' && (
+                <div className="team-grid">
+                  {members.map(m => (
+                    <article className="member-card" key={m.id}>
+                      <Avatar member={m} />
+                      <div>
+                        <h3>
+                          {m.name}{m.id === me.id ? ' (คุณ)' : ''}
+                          {m.leaveToday && <span className="member-leave-tag">{m.leaveToday.emoji} {m.leaveToday.label}</span>}
+                        </h3>
+                        <p>{m.role}</p>
+                        <small>
+                          {m.leaveToday ? `ลางานวันนี้ (${m.leaveToday.label})` : (m.online ? `${statuses[m.status]} · ${rooms.find(r => r.id === m.room)?.name}` : 'ออฟไลน์')}
+                        </small>
+                      </div>
+                      {m.id !== me.id && (
+                        m.room === 'focus' ? (
+                          <span className="focus-zone-badge-tag" title="เพื่อนกำลังโฟกัสการทำงานอยู่ กรุณาโทรมือถือไปหาแทนหากมีงานด่วน">
+                            🤫 โฟกัสงาน (โทรหาหากด่วน)
+                          </span>
+                        ) : (
+                          <button className="secondary" disabled={!m.online || Boolean(m.leaveToday)} onClick={() => setKnockTarget(m)}>
+                            <Hand size={16} />ขอคุย
+                          </button>
+                        )
+                      )}
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              {/* PAGE: Unified Feed (Today Work + Announcements) */}
+              {(page === 'feed' || page === 'today' || page === 'announcements') && (
+                <div className="feed-container">
+                  {/* 1. Filter Tabs */}
+                  <div className="feed-filter-tabs">
+                    <button
+                      type="button"
+                      className={`feed-tab-btn ${feedSubTab === 'tasks' ? 'active' : ''}`}
+                      onClick={() => setFeedSubTab('tasks')}
+                    >
+                      <CheckSquare size={13} style={{ marginRight: '4px' }} />
+                      <span>📋 มอบหมายงาน</span>
+                      <span style={{ opacity: 0.85 }}>({tasks.length})</span>
+                      {myPendingTasksCount > 0 && (
+                        <span style={{ background: '#2563eb', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>
+                          {myPendingTasksCount} งานของคุณ
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className={`feed-tab-btn ${feedSubTab === 'feed' && feedFilter === 'all' ? 'active' : ''}`}
+                      onClick={() => { setFeedSubTab('feed'); setFeedFilter('all'); }}
+                    >
+                      <span>ฟีดทั้งหมด</span>
+                      <span style={{ opacity: 0.8 }}>({feedPosts.length})</span>
+                      {unreadFeedCount > 0 && (
+                        <span style={{ background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>
+                          {unreadFeedCount} รอรับทราบ
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className={`feed-tab-btn ${feedSubTab === 'feed' && feedFilter === 'today' ? 'active' : ''}`}
+                      onClick={() => { setFeedSubTab('feed'); setFeedFilter('today'); }}
+                    >
+                      <span>💼 งานวันนี้</span>
+                      <span style={{ opacity: 0.8 }}>({feedPosts.filter(p => p.type === 'today').length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`feed-tab-btn ${feedSubTab === 'feed' && feedFilter === 'announcement' ? 'active' : ''}`}
+                      onClick={() => { setFeedSubTab('feed'); setFeedFilter('announcement'); }}
+                    >
+                      <span>📢 เรื่องประกาศ</span>
+                      <span style={{ opacity: 0.8 }}>({feedPosts.filter(p => p.type === 'announcement').length})</span>
+                    </button>
+                  </div>
+
+                  {feedSubTab === 'tasks' ? (
+                    <div className="task-system-wrapper">
+                      {/* KPI Summary Cards */}
+                      <div className="task-summary-row">
+                        <div className="task-kpi-card">
+                          <div className="task-kpi-icon blue"><ClipboardList size={18} /></div>
+                          <div className="task-kpi-text">
+                            <small>งานทั้งหมด</small>
+                            <strong>{tasks.length}</strong>
+                          </div>
+                        </div>
+                        <div className="task-kpi-card">
+                          <div className="task-kpi-icon amber"><Clock size={18} /></div>
+                          <div className="task-kpi-text">
+                            <small>รอดำเนินการ</small>
+                            <strong>{tasks.filter(t => t.status !== 'done').length}</strong>
+                          </div>
+                        </div>
+                        <div className="task-kpi-card">
+                          <div className="task-kpi-icon red"><AlertTriangle size={18} /></div>
+                          <div className="task-kpi-text">
+                            <small>ส่งวันนี้/เกินกำหนด</small>
+                            <strong>{urgentDeadlinesCount}</strong>
+                          </div>
+                        </div>
+                        <div className="task-kpi-card">
+                          <div className="task-kpi-icon green"><CheckCircle2 size={18} /></div>
+                          <div className="task-kpi-text">
+                            <small>เสร็จสมบูรณ์</small>
+                            <strong>{tasks.filter(t => t.status === 'done').length}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Task Action Bar: Filters + Assign Task Button */}
+                      <div className="task-action-bar">
+                        <div className="task-filter-chips">
+                          {[
+                            { id: 'all', label: 'ทั้งหมด' },
+                            { id: 'assigned_to_me', label: `งานที่มอบให้ฉัน (${tasks.filter(t => t.assignees.some(a => a.id === me.id)).length})` },
+                            { id: 'created_by_me', label: 'งานที่ฉันมอบหมาย' },
+                            { id: 'pending', label: 'ยังไม่เสร็จ' },
+                            { id: 'completed', label: 'เสร็จแล้ว' }
+                          ].map(filter => (
+                            <button
+                              type="button"
+                              key={filter.id}
+                              className={`task-filter-btn ${taskFilter === filter.id ? 'active' : ''}`}
+                              onClick={() => setTaskFilter(filter.id as any)}
+                            >
+                              {filter.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          className="primary create-task-trigger-btn"
+                          onClick={() => {
+                            setTaskTitleDraft('');
+                            setTaskDescDraft('');
+                            setTaskDueDateDraft(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+                            setTaskDueTimeDraft('17:00');
+                            setTaskPriorityDraft('normal');
+                            setTaskAssigneesDraft([me.id]);
+                            setTaskModalOpen(true);
+                          }}
+                        >
+                          <Plus size={15} /> มอบหมายงานใหม่
+                        </button>
+                      </div>
+
+                      {/* Task Cards List */}
+                      <div className="task-cards-list">
+                        {filteredTasks.length === 0 ? (
+                          <div className="task-empty-state">
+                            <div className="empty-icon-circle">📋</div>
+                            <h3>ไม่มีรายการงานในหมวดหมู่นี้</h3>
+                            <p>คุณสามารถคลิก "มอบหมายงานใหม่" ด้านบนเพื่อเริ่มมอบหมายงานให้เพื่อนร่วมทีมหรือตัวเองได้ทันที</p>
+                          </div>
+                        ) : (
+                          filteredTasks.map(task => {
+                            const deadline = getDeadlineStatus(task.dueDate, task.dueTime, task.status);
+                            const isCreator = task.creatorId === me.id;
+                            const completedAssigneesCount = task.assignees.filter(a => a.completed).length;
+
+                            return (
+                              <article className={`task-card-item ${task.status} ${task.priority}`} key={task.id}>
+                                <div className="task-card-header">
+                                  <div className="task-header-tags">
+                                    <span className={`task-priority-tag ${task.priority}`}>
+                                      {task.priority === 'urgent' ? '⚡ ด่วนมาก' : task.priority === 'normal' ? '📌 ปกติ' : '☕ ไม่ด่วน'}
+                                    </span>
+                                    <span className={`task-deadline-tag ${deadline.type}`}>
+                                      <Clock size={12} />
+                                      <span>{deadline.text}</span>
+                                    </span>
+                                    <span className={`task-status-tag ${task.status}`}>
+                                      {task.status === 'done' ? '✅ เสร็จสิ้น' : task.status === 'in_progress' ? '⏳ กำลังทำ' : '📋 รอเริ่มงาน'}
+                                    </span>
+                                  </div>
+
+                                  <div className="task-header-actions">
+                                    {(isCreator || me.isAdmin) && (
+                                      <button
+                                        type="button"
+                                        className="task-delete-icon-btn"
+                                        onClick={() => handleDeleteTask(task.id)}
+                                        title="ลบงานที่มอบหมายนี้"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="task-card-body">
+                                  <h3>{task.title}</h3>
+                                  {task.description && <p>{task.description}</p>}
+                                </div>
+
+                                <div className="task-card-creator">
+                                  <span className="creator-label">ผู้มอบหมาย:</span>
+                                  <span className="creator-badge">
+                                    {task.creatorAvatar ? <span className="creator-av-icon">{task.creatorAvatar}</span> : '👤'}
+                                    <strong>{task.creatorName}</strong>
+                                  </span>
+                                  <small className="creator-time">· {formatPostTime(task.createdAt)}</small>
+                                </div>
+
+                                {/* Multi-Assignee Progress & Interactive Checklist */}
+                                <div className="task-assignees-container">
+                                  <div className="task-assignees-heading">
+                                    <span>ผู้รับผิดชอบงาน ({completedAssigneesCount}/{task.assignees.length} คนส่งงานแล้ว):</span>
+                                    {task.assignees.length > 0 && (
+                                      <div className="assignee-progress-bar">
+                                        <div
+                                          className="assignee-progress-fill"
+                                          style={{ width: `${(completedAssigneesCount / task.assignees.length) * 100}%` }}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="task-assignees-pills-grid">
+                                    {task.assignees.map(a => {
+                                      const isMe = a.id === me.id;
+                                      return (
+                                        <div className={`assignee-pill-row ${a.completed ? 'completed' : 'pending'}`} key={a.id}>
+                                          <div className="assignee-pill-left">
+                                            {a.avatar ? <span className="assignee-pill-avatar">{a.avatar}</span> : <span className="assignee-pill-avatar">👤</span>}
+                                            <span className="assignee-pill-name">{a.name}{isMe ? ' (คุณ)' : ''}</span>
+                                          </div>
+                                          {isMe ? (
+                                            <button
+                                              type="button"
+                                              className={`assignee-toggle-check-btn ${a.completed ? 'is-done' : 'is-todo'}`}
+                                              onClick={() => handleToggleAssigneeDone(task.id)}
+                                              title={a.completed ? "คุณส่งงานแล้ว (คลิกเพื่อยกเลิก)" : "คลิกเพื่อส่งมอบงานของคุณ"}
+                                            >
+                                              {a.completed ? (
+                                                <>
+                                                  <CheckCircle2 size={13} color="#059669" />
+                                                  <span>ส่งงานแล้ว ✓</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Square size={13} color="#64748b" />
+                                                  <span>คลิกส่งงาน</span>
+                                                </>
+                                              )}
+                                            </button>
+                                          ) : (
+                                            <span className={`assignee-static-badge ${a.completed ? 'done' : 'todo'}`}>
+                                              {a.completed ? '✓ ส่งแล้ว' : '⏳ รอส่งงาน'}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </article>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* 2. Composer Card (Open to all members) */}
+                      <div className="feed-composer-card">
+                        <form onSubmit={handleCreatePost}>
+                          <div className="feed-composer-header">
+                            <div className="feed-author-meta">
+                              <Avatar member={me} small />
+                              <div className="feed-author-text">
+                                <strong>{me.name}</strong>
+                                <small>แชร์ให้เพื่อนร่วมทีม</small>
+                              </div>
+                            </div>
+                            <div className="feed-type-selector">
+                              <button
+                                type="button"
+                                className={`type-pill-btn today ${newPostType === 'today' ? 'active today' : ''}`}
+                                onClick={() => setNewPostType('today')}
+                              >
+                                💼 งานวันนี้
+                              </button>
+                              <button
+                                type="button"
+                                className={`type-pill-btn announcement ${newPostType === 'announcement' ? 'active announcement' : ''}`}
+                                onClick={() => setNewPostType('announcement')}
+                              >
+                                📢 เรื่องประกาศ
+                              </button>
+                            </div>
+                          </div>
+
+                          <div style={{ marginBottom: '10px' }}>
+                            <input
+                              type="text"
+                              placeholder={newPostType === 'today' ? "หัวข้องานวันนี้ (เช่น พัฒนาฟีเจอร์, เตรียมเอกสาร...)" : "หัวข้อเรื่องประกาศ (เช่น นัดหมายสำคัญ, กิจกรรมทีม...)"}
+                              value={newPostTitle}
+                              onChange={e => setNewPostTitle(e.target.value)}
+                              maxLength={120}
+                              style={{ width: '100%', padding: '9px 12px', fontSize: '13px', borderRadius: '10px', border: '1px solid #cbd5e1' }}
+                            />
+                          </div>
+
+                          <div style={{ marginBottom: '12px' }}>
+                            <textarea
+                              required
+                              rows={3}
+                              placeholder={newPostType === 'today' ? "วันนี้ทำอะไรอยู่ หรือมีเรื่องที่อยากให้ทีมช่วย?" : "พิมพ์รายละเอียดเรื่องประกาศที่ทุกคนควรรู้..."}
+                              value={newPostContent}
+                              onChange={e => setNewPostContent(e.target.value)}
+                              maxLength={1000}
+                              style={{ width: '100%', padding: '10px 12px', fontSize: '13px', borderRadius: '10px', border: '1px solid #cbd5e1', resize: 'vertical' }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button type="submit" className="primary" style={{ padding: '8px 18px', fontSize: '12px' }}>
+                              <Send size={13} style={{ marginRight: '6px' }} /> โพสต์{newPostType === 'today' ? 'งานวันนี้' : 'เรื่องประกาศ'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+
+                      {/* 3. Feed Posts List */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        {feedPosts
+                          .filter(p => feedFilter === 'all' || p.type === feedFilter)
+                          .map(post => {
+                            const isAuthor = post.authorId === me.id;
+                            const canDelete = isAuthor || me.isAdmin;
+                            const authorMember = members.find(m => m.id === post.authorId);
+                            const authorDisplayMember: Member = authorMember || {
+                              id: post.authorId,
+                              name: post.authorName,
+                              role: 'ทีม PRIME',
+                              room: 'hub',
+                              status: 'available',
+                              online: false,
+                              color: 'blue',
+                              avatarUrl: post.authorAvatar
+                            };
+
+                            const hasReacted =
+                              (post.reactions.likes || []).includes(me.id) ||
+                              (post.reactions.claps || []).includes(me.id) ||
+                              (post.reactions.noted || []).includes(me.id);
+                            const isMyPost = post.authorId === me.id;
+
+                            return (
+                              <article className="feed-post-card" key={post.id}>
+                                {/* Post Header */}
+                                <div className="feed-post-header">
+                                  <div className="feed-author-meta">
+                                    <Avatar member={authorDisplayMember} small />
+                                    <div className="feed-author-text">
+                                      <strong>{post.authorName}</strong>
+                                      <small>{formatPostTime(post.createdAt)}</small>
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {!isMyPost && !hasReacted && (
+                                      <span style={{
+                                        background: '#ef4444',
+                                        color: '#ffffff',
+                                        fontSize: '10px',
+                                        fontWeight: 700,
+                                        padding: '2px 8px',
+                                        borderRadius: '10px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '3px'
+                                      }}>
+                                        🔴 ยังไม่ได้รับทราบ
+                                      </span>
+                                    )}
+                                    {!isMyPost && hasReacted && (
+                                      <span style={{
+                                        background: '#ecfdf5',
+                                        color: '#059669',
+                                        fontSize: '10px',
+                                        fontWeight: 600,
+                                        padding: '2px 8px',
+                                        borderRadius: '10px'
+                                      }}>
+                                        ✓ รับทราบแล้ว
+                                      </span>
+                                    )}
+                                    <span className={`feed-tag-badge ${post.type}`}>
+                                      {post.type === 'today' ? '💼 งานวันนี้' : '📢 เรื่องประกาศ'}
+                                    </span>
+                                    {canDelete && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeletePost(post.id)}
+                                        title="ลบโพสต์นี้"
+                                        style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Post Content */}
+                                <div className="feed-post-content">
+                                  {post.title && <h3>{post.title}</h3>}
+                                  <p>{post.content}</p>
+                                </div>
+
+                                {/* Reactions Bar */}
+                                <div className="feed-reaction-bar">
+                                  <button
+                                    type="button"
+                                    className={`reaction-btn like ${(post.reactions.likes || []).includes(me.id) ? 'active' : ''}`}
+                                    onClick={() => handleToggleReaction(post.id, 'likes')}
+                                    title="กดถูกใจ (Like)"
+                                  >
+                                    <Heart size={13} fill={(post.reactions.likes || []).includes(me.id) ? 'currentColor' : 'none'} />
+                                    <span>ถูกใจ</span>
+                                    {(post.reactions.likes || []).length > 0 && <strong>{(post.reactions.likes || []).length}</strong>}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={`reaction-btn clap ${(post.reactions.claps || []).includes(me.id) ? 'active' : ''}`}
+                                    onClick={() => handleToggleReaction(post.id, 'claps')}
+                                    title="กดเยี่ยม (Great)"
+                                  >
+                                    <ThumbsUp size={13} fill={(post.reactions.claps || []).includes(me.id) ? 'currentColor' : 'none'} />
+                                    <span>เยี่ยม</span>
+                                    {(post.reactions.claps || []).length > 0 && <strong>{(post.reactions.claps || []).length}</strong>}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={`reaction-btn noted ${(post.reactions.noted || []).includes(me.id) ? 'active' : ''}`}
+                                    onClick={() => handleToggleReaction(post.id, 'noted')}
+                                    title="กดรับทราบ (Noted)"
+                                  >
+                                    <CheckSquare size={13} />
+                                    <span>รับทราบ</span>
+                                    {(post.reactions.noted || []).length > 0 && <strong>{(post.reactions.noted || []).length}</strong>}
+                                  </button>
+
+                                  <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <MessageSquare size={13} />
+                                    <span>{(post.comments || []).length} ความคิดเห็น</span>
+                                  </div>
+                                </div>
+
+                                {/* Comments Section */}
+                                <div className="feed-comment-section">
+                                  {(post.comments && post.comments.length > 0) && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                      {post.comments.map(c => {
+                                        const cMember = members.find(m => m.id === c.authorId) || {
+                                          id: c.authorId,
+                                          name: c.authorName,
+                                          role: 'ทีม PRIME',
+                                          room: 'hub',
+                                          status: 'available',
+                                          online: false,
+                                          color: 'blue',
+                                          avatarUrl: c.authorAvatar
+                                        };
+                                        return (
+                                          <div className="feed-comment-row" key={c.id}>
+                                            <Avatar member={cMember} small />
+                                            <div className="feed-comment-bubble">
+                                              <strong>{c.authorName}</strong>
+                                              <p>{c.content}</p>
+                                              <small>{formatPostTime(c.createdAt)}</small>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {/* Comment Input */}
+                                  <form
+                                    className="feed-comment-input-row"
+                                    onSubmit={e => {
+                                      e.preventDefault();
+                                      handleAddComment(post.id);
+                                    }}
+                                  >
+                                    <input
+                                      type="text"
+                                      placeholder="เขียนความคิดเห็นหรือตอบกลับ…"
+                                      value={commentDrafts[post.id] || ''}
+                                      onChange={e => setCommentDrafts({ ...commentDrafts, [post.id]: e.target.value })}
+                                      maxLength={300}
+                                    />
+                                    <button type="submit" disabled={!commentDrafts[post.id]?.trim()}>
+                                      ตอบ
+                                    </button>
+                                  </form>
+                                </div>
+                              </article>
+                            );
+                          })}
+
+                        {feedPosts.filter(p => feedFilter === 'all' || p.type === feedFilter).length === 0 && (
+                          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8', background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                            <ClipboardList size={36} style={{ margin: '0 auto 10px', opacity: 0.5 }} />
+                            <p style={{ margin: 0, fontSize: '13px' }}>ยังไม่มีรายการในหมวดนี้ โพสต์เป็นคนแรกได้เลย!</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* PAGE: Admin Dashboard */}
+              {page === 'admin' && me.isAdmin && (
+                <div className="admin-grid">
+                  <section className="panel">
+                    <h2><Video size={21} />ระบบห้องประชุมวิดีโอ (WebRTC Native)</h2>
+                    <p>ระบบประชุมวิดีโอแบบเปิดกล้องและแชร์หน้าจอ ทำงานในตัวแบบเสร็จสรรพ ไม่ต้องใช้ Google Meet</p>
+                    <div className="setup-note" style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
+                      <p>✅ <strong>ระบบประชุมพร้อมใช้งาน:</strong> ห้องประชุมวิดีโอความละเอียดสูงพร้อมใช้งานในห้อง PRIME Hub, Project Room และ Coffee Corner (ยกเว้น Focus Zone ที่สงวนไว้เป็นโซนสมาธิส่วนตัว)</p>
+                      <p style={{ marginTop: '8px' }}>🔐 <strong>ความปลอดภัย:</strong> เข้ารหัสแบบ End-to-End P2P ส่งสัญญาณภาพและเสียงตรงระหว่างสมาชิกในห้องประชุม</p>
+                    </div>
+                    <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={() => { void startConference('project'); }}
+                      >
+                        <Video size={16} /> ทดสอบเปิดห้องประชุม Project Room
+                      </button>
+                    </div>
+                  </section>
+
+                  <section className="panel">
+                    <h2><ShieldCheck size={21} />อนุญาตสมาชิก</h2>
+                    <p>เพิ่มรายชื่ออีเมลก่อนให้สมาชิกเข้าสู่ระบบ รองรับ 15 บัญชีที่เปิดใช้งาน</p>
+                    {demo ? (
+                      <div className="setup-note">โหมดสาธิตยังไม่เพิ่มบัญชีจริง<br />เชื่อม Supabase แล้วจึงจัดการสิทธิ์สมาชิกได้</div>
+                    ) : (
+                      <>
+                        <form className="admin-form" onSubmit={e => {
+                          e.preventDefault();
+                          void action(async () => {
+                            const { error } = await supabase!.rpc('admin_upsert_member', { p_email: normalizeEmail(inviteEmail), p_name: inviteName, p_active: true, p_admin: false });
+                            if (error) throw error;
+                            setInviteEmail('');
+                            setInviteName('');
+                            await loadAdmin();
+                            await refresh();
+                            notify('อนุญาตสมาชิกแล้ว ให้สมาชิกเข้าสู่ระบบด้วย Google');
+                          });
+                        }}>
+                          <label>ชื่อ<input required maxLength={80} value={inviteName} onChange={e => setInviteName(e.target.value)} /></label>
+                          <label>อีเมล Google<input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} /></label>
+                          <button disabled={busy} className="primary">เพิ่มสมาชิก</button>
+                        </form>
+                        <div className="admin-members">
+                          {adminMembers.map(m => (
+                            <div key={m.id}>
+                              <span><strong>{m.name}{m.is_admin ? ' · ผู้ดูแล' : ''}</strong><small>{m.email}</small></span>
+                              <button className="text-button" disabled={busy} onClick={() => void action(async () => {
+                                const { error } = await supabase!.rpc('admin_upsert_member', { p_email: m.email, p_name: m.name, p_active: !m.active, p_admin: m.is_admin });
+                                if (error) throw error;
+                                await loadAdmin();
+                                await refresh();
+                              })}>
+                                {m.active ? 'ปิดสิทธิ์' : 'เปิดสิทธิ์'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </section>
+                </div>
+              )}
 
               <footer className="page-footer">
                 <span>PRIME DIGITAL CONSULTANT</span>
@@ -3183,7 +3183,7 @@ export default function App() {
                 <label style={{ fontSize: '12px', color: '#688090', display: 'block', marginBottom: '6px' }}>ชื่อของคุณ</label>
                 <input required maxLength={80} style={{ width: '100%' }} value={editName} onChange={e => setEditName(e.target.value)} placeholder="เช่น เมย์, ต้น, ก้อง…" />
               </div>
-              
+
               <div style={{ textAlign: 'left', marginBottom: '14px' }}>
                 <label style={{ fontSize: '12px', color: '#688090', display: 'block', marginBottom: '6px' }}>รูปภาพโพรไฟล์ของคุณ</label>
                 <div className="upload-avatar-row">
@@ -3192,10 +3192,10 @@ export default function App() {
                     <input type="file" accept="image/*" onChange={handleAvatarFileUpload} />
                   </label>
                   {editAvatar && (
-                    <button 
-                      type="button" 
-                      className="secondary" 
-                      style={{ padding: '6px 10px', fontSize: '11px' }} 
+                    <button
+                      type="button"
+                      className="secondary"
+                      style={{ padding: '6px 10px', fontSize: '11px' }}
                       onClick={() => setEditAvatar('')}
                     >
                       ลบรูป
@@ -3457,8 +3457,8 @@ export default function App() {
                 <Zap size={16} className="flash-zap-pulse" />
                 <span>⚡ ประกาศด่วนพิเศษ · FLASH ANNOUNCEMENT</span>
               </div>
-              <button 
-                className="flash-popup-close-btn" 
+              <button
+                className="flash-popup-close-btn"
                 onClick={() => setUrgentPopup(null)}
                 title="ปิดข้อความ"
               >
@@ -3486,8 +3486,8 @@ export default function App() {
               <small className="focus-protection-hint">
                 🤫 ป็อปอัปนี้แจ้งเตือนทุกคนทันที (ยกเว้นผู้ที่อยู่ในห้อง Focus Zone เพื่อรักษาความเงียบ)
               </small>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="flash-acknowledge-btn"
                 onClick={() => {
                   playChime('stop');
@@ -3511,12 +3511,12 @@ export default function App() {
             <div>
               <strong>Voice Huddle · {rooms.find(r => r.id === huddleRoomId)?.name}</strong>
               <small>
-                {isDeafened 
-                  ? 'ปิดเสียงลำโพง' 
-                  : isMuted 
-                    ? 'ไมโครโฟนปิดอยู่ (Muted)' 
-                    : isSpeaking 
-                      ? '🎙️ กำลังส่งเสียงพูด…' 
+                {isDeafened
+                  ? 'ปิดเสียงลำโพง'
+                  : isMuted
+                    ? 'ไมโครโฟนปิดอยู่ (Muted)'
+                    : isSpeaking
+                      ? '🎙️ กำลังส่งเสียงพูด…'
                       : (activeVoicePeers.length > 1 ? `เชื่อมต่อ P2P (${activeVoicePeers.length} คน) · พร้อมพูด` : 'เปิดไมค์พร้อมพูด')}
               </small>
               {!isMuted && (
@@ -3527,7 +3527,7 @@ export default function App() {
             </div>
           </div>
           <div className="huddle-dock-actions">
-            <button 
+            <button
               type="button"
               className={`huddle-dock-btn ${!isMuted ? (isSpeaking ? 'active speaking' : 'active') : 'muted'}`}
               onPointerDown={handleMicPointerDown}
@@ -3539,14 +3539,14 @@ export default function App() {
               {!isMuted ? <Mic size={16} className={isSpeaking ? 'pulse-icon' : ''} /> : <MicOff size={16} />}
               <span>{!isMuted ? (isSpeaking ? 'กำลังพูด…' : 'ไมค์เปิด') : 'กดพูด (หรือกดค้าง)'}</span>
             </button>
-            <button 
+            <button
               className={`huddle-dock-btn ${isDeafened ? 'muted' : ''}`}
               onClick={toggleDeafen}
               title={isDeafened ? 'เปิดเสียงลำโพง' : 'ปิดเสียงลำโพง'}
             >
               <Headphones size={16} />
             </button>
-            <button 
+            <button
               className={`huddle-dock-btn ${isLoopback ? 'active' : ''}`}
               onClick={toggleLoopback}
               title={isLoopback ? 'ปิดการทดสอบฟังเสียงตัวเอง' : 'เปิดทดสอบฟังเสียงไมค์ตัวเอง (Loopback)'}
@@ -3554,7 +3554,7 @@ export default function App() {
               <Volume2 size={16} />
               <span>{isLoopback ? 'ฟังเสียงอยู่' : 'ทดสอบไมค์'}</span>
             </button>
-            <button 
+            <button
               className="huddle-dock-btn meet-link"
               onClick={() => { void startConference(huddleRoomId || 'project'); }}
               title="เปิดห้องประชุมวิดีโอ (WebRTC Conference)"
@@ -3562,7 +3562,7 @@ export default function App() {
               <Video size={16} />
               <span>ประชุมวิดีโอ</span>
             </button>
-            <button 
+            <button
               className="huddle-dock-btn hangup"
               onClick={leaveHuddle}
               title="ออกจาก Voice Huddle"
