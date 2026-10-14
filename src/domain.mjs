@@ -20,16 +20,43 @@ export function loadDemo(storage) {
 }
 
 export function checkAttendanceStatus(date) {
+  if (!date) return 'on_time';
   const d = new Date(date);
-  const hours = d.getHours();
-  const minutes = d.getMinutes();
-  return (hours > 9 || (hours === 9 && minutes > 5)) ? 'late' : 'on_time';
+  if (isNaN(d.getTime())) return 'on_time';
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Bangkok',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    }).formatToParts(d);
+    const h = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+    const m = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+    return (h > 9 || (h === 9 && m > 5)) ? 'late' : 'on_time';
+  } catch {
+    const hours = d.getHours();
+    const minutes = d.getMinutes();
+    return (hours > 9 || (hours === 9 && minutes > 5)) ? 'late' : 'on_time';
+  }
 }
 
 export function formatThaiTime(dateStr) {
   if (!dateStr) return '-';
   const d = new Date(dateStr);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} น.`;
+  if (isNaN(d.getTime())) return '-';
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Bangkok',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    }).formatToParts(d);
+    const h = parts.find(p => p.type === 'hour')?.value || '00';
+    const m = parts.find(p => p.type === 'minute')?.value || '00';
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} น.`;
+  } catch {
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} น.`;
+  }
 }
 
 export const THAI_MONTH_NAMES = [

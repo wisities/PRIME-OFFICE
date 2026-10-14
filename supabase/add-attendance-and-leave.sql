@@ -38,13 +38,13 @@ create policy leave_read on public.leave_requests for select to authenticated us
 revoke all on public.attendance_logs, public.leave_requests from anon, authenticated;
 grant select on public.attendance_logs, public.leave_requests to authenticated;
 
--- Check-in function: Records check-in and detects late (> 08:05 BKK)
+-- Check-in function: Records check-in and detects late (> 09:05 BKK)
 create or replace function public.check_in_today()
 returns json language plpgsql security definer set search_path = '' as $$
 declare
   v_today date := (current_timestamp at time zone 'Asia/Bangkok')::date;
   v_now_bkk time := (current_timestamp at time zone 'Asia/Bangkok')::time;
-  v_status text := case when v_now_bkk > '08:05:00'::time then 'late' else 'on_time' end;
+  v_status text := case when v_now_bkk > '09:05:00'::time then 'late' else 'on_time' end;
   v_record public.attendance_logs;
 begin
   if not public.is_active_member() then raise exception 'not_allowed'; end if;

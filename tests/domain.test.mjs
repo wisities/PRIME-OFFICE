@@ -15,6 +15,18 @@ test('attendance calculation and time formatting',()=>{
   assert.equal(checkAttendanceStatus(onTime), 'on_time');
   assert.equal(checkAttendanceStatus(late), 'late');
   assert.equal(formatThaiTime(onTime), '08:55 น.');
+
+  // Explicitly test check-ins before 09:00 (e.g. 08:30 and 08:37)
+  const armTime = new Date(2026, 9, 14, 8, 30);
+  const jariyaTime = new Date(2026, 9, 14, 8, 37);
+  const onTime900 = new Date(2026, 9, 14, 9, 0);
+  const onTime905 = new Date(2026, 9, 14, 9, 5);
+  const late906 = new Date(2026, 9, 14, 9, 6);
+  assert.equal(checkAttendanceStatus(armTime), 'on_time');
+  assert.equal(checkAttendanceStatus(jariyaTime), 'on_time');
+  assert.equal(checkAttendanceStatus(onTime900), 'on_time');
+  assert.equal(checkAttendanceStatus(onTime905), 'on_time');
+  assert.equal(checkAttendanceStatus(late906), 'late');
 });
 
 test('Thai Government Public Holiday engine verifies company holidays', () => {

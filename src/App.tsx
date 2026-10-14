@@ -592,7 +592,11 @@ export default function App() {
 
     const myGoogleAvatar = session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture;
     const leavesData: LeaveRequest[] = results[6].data || [];
-    const attData: AttendanceRecord[] = results[5].data || [];
+    const rawAttData = results[5].data || [];
+    const attData: AttendanceRecord[] = rawAttData.map((a: any) => ({
+      ...a,
+      status: a.check_in_at ? checkAttendanceStatus(a.check_in_at) : a.status
+    }));
     setLiveAttendance(attData);
     setLiveLeaves(leavesData);
 

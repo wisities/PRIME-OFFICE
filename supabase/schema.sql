@@ -213,7 +213,7 @@ create function public.check_in_today() returns json language plpgsql security d
 declare
   v_today date := (current_timestamp at time zone 'Asia/Bangkok')::date;
   v_now_bkk time := (current_timestamp at time zone 'Asia/Bangkok')::time;
-  v_status text := case when v_now_bkk > '08:05:00'::time then 'late' else 'on_time' end;
+  v_status text := case when v_now_bkk > '09:05:00'::time then 'late' else 'on_time' end;
   v_record public.attendance_logs;
 begin
   if not public.is_active_member() then raise exception 'not_allowed'; end if;
@@ -236,7 +236,7 @@ begin
   returning * into v_record;
   if not found then
     insert into public.attendance_logs(user_id, work_date, check_in_at, check_out_at, status)
-    values(auth.uid(), v_today, now(), now(), 'late')
+    values(auth.uid(), v_today, now(), now(), case when (current_timestamp at time zone 'Asia/Bangkok')::time > '09:05:00'::time then 'late' else 'on_time' end)
     returning * into v_record;
   end if;
   return json_build_object('id', v_record.id, 'work_date', v_record.work_date, 'check_in_at', v_record.check_in_at, 'check_out_at', v_record.check_out_at, 'status', v_record.status);
