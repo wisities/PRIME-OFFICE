@@ -6,13 +6,14 @@ import {
   List, Wifi, WifiOff, CalendarCheck, Clock, CheckCircle2, AlertCircle, Plus, Trash2,
   Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles,
   Maximize2, Minimize2, Camera, Heart, ThumbsUp, CheckSquare, MessageSquare, Send,
-  Zap, AlertTriangle, Calendar, UserCheck, Square
+  Zap, AlertTriangle, Calendar, UserCheck, Square, MessageCircle, Lock, Search, ArrowLeft
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import {
   rooms as initialRooms, statuses, sampleMembers, sampleAttendance, sampleLeaves,
   leaveTypesConfig, periodLabels, type Room, type RoomId, type Status, type Member,
-  type AttendanceRecord, type LeaveRequest, type LeaveType, type ThaiHoliday
+  type AttendanceRecord, type LeaveRequest, type LeaveType, type ThaiHoliday,
+  type RoomChatMessage, type DirectMessage, sampleRoomMessages, sampleDirectMessages
 } from './data';
 import {
   loadDemo, validMeetUrl, normalizeEmail, checkAttendanceStatus, formatThaiTime,
@@ -204,13 +205,14 @@ const defaultFeedPosts: FeedPost[] = [
   }
 ];
 
-type Page = 'office' | 'team' | 'attendance' | 'feed' | 'admin' | 'today' | 'announcements';
+type Page = 'office' | 'team' | 'attendance' | 'feed' | 'chat' | 'admin' | 'today' | 'announcements';
 type Knock = { id: string; sender: string; receiver_id?: string; room_id: RoomId; state: string; created_at: string };
 type Notice = { id: string; title: string; body: string };
 
 const nav = [
   { id: 'office', label: 'ออฟฟิศของเรา', icon: Home },
   { id: 'feed', label: 'ฟีด & มอบหมายงาน', icon: ClipboardList },
+  { id: 'chat', label: 'แชททีม & DM', icon: MessageSquare },
   { id: 'attendance', label: 'ลงเวลา & ลางาน', icon: CalendarCheck },
   { id: 'team', label: 'สมาชิกทีม', icon: Users },
   { id: 'admin', label: 'ผู้ดูแลระบบ', icon: Settings }
@@ -412,6 +414,59 @@ export default function App() {
   const [urgentModalOpen, setUrgentModalOpen] = useState(false);
   const [urgentDraft, setUrgentDraft] = useState('');
 
+  // Room Chat & Direct Messages State
+  const [roomMessages, setRoomMessages] = useState<RoomChatMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem('prime-room-messages-v1');
+      return saved ? JSON.parse(saved) : sampleRoomMessages;
+    } catch {
+      return sampleRoomMessages;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('prime-room-messages-v1', JSON.stringify(roomMessages));
+    } catch { }
+  }, [roomMessages]);
+
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem('prime-direct-messages-v1');
+      return saved ? JSON.parse(saved) : sampleDirectMessages;
+    } catch {
+      return sampleDirectMessages;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('prime-direct-messages-v1', JSON.stringify(directMessages));
+    } catch { }
+  }, [directMessages]);
+
+  const [chatTab, setChatTab] = useState<'rooms' | 'dm'>('rooms');
+  const [chatSelectedRoom, setChatSelectedRoom] = useState<'hub' | 'project' | 'coffee' | 'focus'>('hub');
+  const [chatSelectedPeerId, setChatSelectedPeerId] = useState<string | null>(null);
+  const [roomMessageDraft, setRoomMessageDraft] = useState('');
+  const [dmDraft, setDmDraft] = useState('');
+  const [dmSearch, setDmSearch] = useState('');
+
+  const roomChatScrollRef = useRef<HTMLDivElement>(null);
+  const dmScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (roomChatScrollRef.current) {
+      roomChatScrollRef.current.scrollTop = roomChatScrollRef.current.scrollHeight;
+    }
+  }, [roomMessages, chatSelectedRoom, chatTab]);
+
+  useEffect(() => {
+    if (dmScrollRef.current) {
+      dmScrollRef.current.scrollTop = dmScrollRef.current.scrollHeight;
+    }
+  }, [directMessages, chatSelectedPeerId, chatTab]);
+
   // Attendance & Leave State
   const todayDateStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const todayHoliday = useMemo(() => getThaiPublicHoliday(todayDateStr), [todayDateStr]);
@@ -502,7 +557,9 @@ export default function App() {
       supabase.from('attendance_logs').select('*').order('created_at', { ascending: false }).limit(100),
       supabase.from('leave_requests').select('*').eq('status', 'approved').order('created_at', { ascending: false }).limit(100),
       supabase.from('feed_posts').select('*').order('created_at', { ascending: false }).limit(60),
-      supabase.from('tasks').select('*').order('created_at', { ascending: false }).limit(100)
+      supabase.from('tasks').select('*').order('created_at', { ascending: false }).limit(100),
+      supabase.from('room_messages').select('*').order('created_at', { ascending: false }).limit(200),
+      supabase.from('direct_messages').select('*').order('created_at', { ascending: false }).limit(200)
     ]);
 
     const failure = results[0].error || results[1].error || results[2].error || results[3].error;
@@ -577,6 +634,35 @@ export default function App() {
       })));
     }
 
+    const roomMsgRows = results[9]?.data;
+    if (roomMsgRows && Array.isArray(roomMsgRows)) {
+      setRoomMessages(roomMsgRows.slice().reverse().map((r: any) => ({
+        id: r.id,
+        roomId: r.room_id,
+        senderId: r.sender_id,
+        senderName: r.sender_name,
+        senderAvatar: r.sender_avatar,
+        message: r.message,
+        createdAt: r.created_at
+      })));
+    }
+
+    const dmRows = results[10]?.data;
+    if (dmRows && Array.isArray(dmRows)) {
+      setDirectMessages(dmRows.slice().reverse().map((r: any) => ({
+        id: r.id,
+        senderId: r.sender_id,
+        senderName: r.sender_name,
+        senderAvatar: r.sender_avatar,
+        recipientId: r.recipient_id,
+        recipientName: r.recipient_name,
+        recipientAvatar: r.recipient_avatar,
+        message: r.message,
+        createdAt: r.created_at,
+        isRead: r.is_read
+      })));
+    }
+
     const todayStr = new Date().toISOString().slice(0, 10);
     const activeLeavesToday = leavesData.filter(l => l.start_date <= todayStr && l.end_date >= todayStr && l.status === 'approved');
 
@@ -637,6 +723,8 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => void sync())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'feed_posts' }, () => void sync())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => void sync())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_messages' }, () => void sync())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, () => void sync())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'urgent_broadcasts' }, (payload) => {
         void sync();
         const r = payload.new as any;
@@ -654,6 +742,19 @@ export default function App() {
       .on('broadcast', { event: 'urgent_flash' }, ({ payload }) => {
         if (myRoomRef.current !== 'focus') {
           triggerUrgentFlash(payload);
+        }
+      })
+      .on('broadcast', { event: 'room_chat' }, ({ payload }) => {
+        if (payload) {
+          setRoomMessages(prev => prev.some(m => m.id === payload.id) ? prev : [...prev, payload]);
+        }
+      })
+      .on('broadcast', { event: 'dm_chat' }, ({ payload }) => {
+        if (payload) {
+          setDirectMessages(prev => prev.some(m => m.id === payload.id) ? prev : [...prev, payload]);
+          if (payload.recipientId === session?.user?.id && myRoomRef.current !== 'focus') {
+            playAlertChime();
+          }
         }
       })
       .subscribe(status => { if (!cancelled) setConnected(status === 'SUBSCRIBED'); });
@@ -728,6 +829,51 @@ export default function App() {
       return !hasReacted;
     }).length;
   }, [feedPosts, me.id]);
+
+  // Unread Direct Messages Count
+  const unreadDmCount = useMemo(() => {
+    return directMessages.filter(m => m.recipientId === me.id && !m.isRead).length;
+  }, [directMessages, me.id]);
+
+  const peerUnreadCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    directMessages.forEach(m => {
+      if (m.recipientId === me.id && !m.isRead) {
+        map[m.senderId] = (map[m.senderId] || 0) + 1;
+      }
+    });
+    return map;
+  }, [directMessages, me.id]);
+
+  useEffect(() => {
+    const handleLocalRoomChat = (e: Event) => {
+      const detail = (e as CustomEvent<RoomChatMessage>).detail;
+      if (detail) {
+        setRoomMessages(prev => {
+          if (prev.some(m => m.id === detail.id)) return prev;
+          return [...prev, detail];
+        });
+      }
+    };
+    const handleLocalDmChat = (e: Event) => {
+      const detail = (e as CustomEvent<DirectMessage>).detail;
+      if (detail) {
+        setDirectMessages(prev => {
+          if (prev.some(m => m.id === detail.id)) return prev;
+          return [...prev, detail];
+        });
+        if (detail.recipientId === me.id && myRoomRef.current !== 'focus') {
+          playAlertChime();
+        }
+      }
+    };
+    window.addEventListener('prime-room-chat', handleLocalRoomChat);
+    window.addEventListener('prime-dm-chat', handleLocalDmChat);
+    return () => {
+      window.removeEventListener('prime-room-chat', handleLocalRoomChat);
+      window.removeEventListener('prime-dm-chat', handleLocalDmChat);
+    };
+  }, [me.id]);
 
   // Sync my room to ref and isolate Focus Zone from flash popups
   useEffect(() => {
@@ -1498,6 +1644,139 @@ export default function App() {
     });
   };
 
+  // Room Chat & Direct Message Handlers
+  const handleSendRoomMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const text = roomMessageDraft.trim();
+    if (!text) return;
+
+    if (chatSelectedRoom === 'focus') {
+      setError('ห้อง Focus Zone เป็นพื้นที่งดใช้เสียงและปิดแชทห้องเพื่อสมาธิการทำงาน');
+      return;
+    }
+
+    const newMsg: RoomChatMessage = {
+      id: 'rm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      roomId: chatSelectedRoom,
+      senderId: me.id,
+      senderName: me.name,
+      senderAvatar: me.avatarUrl,
+      message: text,
+      createdAt: new Date().toISOString()
+    };
+
+    setRoomMessageDraft('');
+    setRoomMessages(prev => [...prev, newMsg]);
+
+    if (demo || !supabase || !session) {
+      try {
+        window.dispatchEvent(new CustomEvent('prime-room-chat', { detail: newMsg }));
+      } catch { }
+      return;
+    }
+
+    try {
+      const channel = supabase.channel('prime-office-updates');
+      await channel.send({
+        type: 'broadcast',
+        event: 'room_chat',
+        payload: newMsg
+      });
+    } catch (err) {
+      console.warn('Realtime room_chat send error:', err);
+    }
+
+    const { error: rpcErr } = await supabase.rpc('send_room_message', {
+      p_room_id: chatSelectedRoom,
+      p_message: text
+    });
+    if (rpcErr) {
+      console.error('send_room_message err:', rpcErr);
+      setError(rpcErr.message.includes('focus_chat_disabled') ? 'ห้อง Focus Zone ปิดแชทเพื่อสมาธิ' : rpcErr.message);
+    }
+  };
+
+  const markDmAsRead = async (peerId: string) => {
+    setDirectMessages(prev => prev.map(m => {
+      if (m.senderId === peerId && m.recipientId === me.id && !m.isRead) {
+        return { ...m, isRead: true };
+      }
+      return m;
+    }));
+    if (!demo && supabase && session) {
+      try {
+        await supabase.rpc('mark_direct_messages_read', { p_sender_id: peerId });
+      } catch (err) {
+        console.warn('mark_direct_messages_read err:', err);
+      }
+    }
+  };
+
+  const handleSendDirectMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const text = dmDraft.trim();
+    if (!text || !chatSelectedPeerId) return;
+
+    const peer = members.find(m => m.id === chatSelectedPeerId);
+    const newMsg: DirectMessage = {
+      id: 'dm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      senderId: me.id,
+      senderName: me.name,
+      senderAvatar: me.avatarUrl,
+      recipientId: chatSelectedPeerId,
+      recipientName: peer?.name || 'เพื่อนร่วมงาน',
+      recipientAvatar: peer?.avatarUrl,
+      message: text,
+      createdAt: new Date().toISOString(),
+      isRead: false
+    };
+
+    setDmDraft('');
+    setDirectMessages(prev => [...prev, newMsg]);
+
+    if (demo || !supabase || !session) {
+      try {
+        window.dispatchEvent(new CustomEvent('prime-dm-chat', { detail: newMsg }));
+      } catch { }
+      return;
+    }
+
+    try {
+      const channel = supabase.channel('prime-office-updates');
+      await channel.send({
+        type: 'broadcast',
+        event: 'dm_chat',
+        payload: newMsg
+      });
+    } catch (err) {
+      console.warn('Realtime dm_chat send error:', err);
+    }
+
+    const { error: rpcErr } = await supabase.rpc('send_direct_message', {
+      p_recipient_id: chatSelectedPeerId,
+      p_message: text
+    });
+    if (rpcErr) {
+      console.error('send_direct_message err:', rpcErr);
+      setError(rpcErr.message);
+    }
+  };
+
+  const openDirectMessage = (peerId: string) => {
+    setChatSelectedPeerId(peerId);
+    setChatTab('dm');
+    setPage('chat');
+    setSelectedRoomCard(null);
+    void markDmAsRead(peerId);
+  };
+
+  const openRoomChat = (roomId: RoomId) => {
+    setChatSelectedRoom(roomId as any);
+    setChatTab('rooms');
+    setPage('chat');
+    setSelectedRoomCard(null);
+  };
+
   // Attendance Handlers (Work hours: 09:00 - 17:00)
   async function handleCheckIn() {
     await action(async () => {
@@ -1845,15 +2124,25 @@ export default function App() {
                 </div>
                 <div className="room-popover-actions">
                   {!isMyRoom ? (
-                    <button className="primary" onClick={() => void updateProfile({ room_id: activeR.id })}>
-                      <DoorOpen size={16} /> ย้ายเข้าห้องนี้
-                    </button>
+                    <>
+                      <button className="primary" onClick={() => void updateProfile({ room_id: activeR.id })}>
+                        <DoorOpen size={16} /> ย้ายเข้าห้องนี้
+                      </button>
+                      {activeR.id !== 'focus' && (
+                        <button className="secondary" onClick={() => openRoomChat(activeR.id)}>
+                          <MessageSquare size={15} /> แชทห้องนี้
+                        </button>
+                      )}
+                    </>
                   ) : activeR.id === 'focus' ? (
                     <div className="focus-zone-card-notice">
-                      <span>🤫 โซนสมาธิส่วนตัว: ปิดเสียงและการประชุมเพื่อโฟกัสงาน (หากมีงานด่วนกรุณาโทรเข้าเบอร์มือถือ)</span>
+                      <span>🤫 โซนสมาธิส่วนตัว: ปิดเสียง การประชุม และแชทห้องเพื่อโฟกัสงาน (หากมีงานด่วนสามารถส่ง Direct Message หรือโทรเข้าเบอร์มือถือ)</span>
                     </div>
                   ) : (
                     <>
+                      <button className="secondary" onClick={() => openRoomChat(activeR.id)}>
+                        <MessageSquare size={15} /> แชทห้องนี้
+                      </button>
                       {inHuddle && huddleRoomId === activeR.id ? (
                         <button className="secondary" onClick={leaveHuddle}>
                           <PhoneOff size={15} color="#ef4444" /> วางสายเสียง
@@ -2081,6 +2370,20 @@ export default function App() {
           <Users size={19} />
           <span className="dock-btn-label">สมาชิก</span>
           <span className="dock-badge" style={{ background: '#475569' }}>{members.length}</span>
+        </button>
+
+        <button
+          className={`dock-btn ${page === 'chat' ? 'active' : ''}`}
+          onClick={() => { setPage('chat'); setSelectedRoomCard(null); }}
+          title="แชทในห้องทำงาน & แชทส่วนตัว (DM)"
+        >
+          <MessageSquare size={19} />
+          <span className="dock-btn-label">แชท & DM</span>
+          {unreadDmCount > 0 && (
+            <span className="dock-badge" style={{ background: '#ef4444' }}>
+              {unreadDmCount}
+            </span>
+          )}
         </button>
 
         <button
@@ -2526,18 +2829,463 @@ export default function App() {
                         </small>
                       </div>
                       {m.id !== me.id && (
-                        m.room === 'focus' ? (
-                          <span className="focus-zone-badge-tag" title="เพื่อนกำลังโฟกัสการทำงานอยู่ กรุณาโทรมือถือไปหาแทนหากมีงานด่วน">
-                            🤫 โฟกัสงาน (โทรหาหากด่วน)
-                          </span>
-                        ) : (
-                          <button className="secondary" disabled={!m.online || Boolean(m.leaveToday)} onClick={() => setKnockTarget(m)}>
-                            <Hand size={16} />ขอคุย
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => openDirectMessage(m.id)}
+                            title={`แชทส่วนตัว (DM) กับ ${m.name}`}
+                          >
+                            <MessageSquare size={15} /> DM
+                            {peerUnreadCounts[m.id] > 0 && (
+                              <span style={{ background: '#ef4444', color: '#fff', borderRadius: '10px', fontSize: '11px', padding: '1px 6px', marginLeft: '4px', fontWeight: 700 }}>
+                                {peerUnreadCounts[m.id]}
+                              </span>
+                            )}
                           </button>
-                        )
+                          {m.room === 'focus' ? (
+                            <span className="focus-zone-badge-tag" title="เพื่อนกำลังโฟกัสการทำงานอยู่ กรุณาโทรมือถือไปหาแทนหากมีงานด่วน">
+                              🤫 โฟกัสงาน
+                            </span>
+                          ) : (
+                            <button type="button" className="secondary" disabled={!m.online || Boolean(m.leaveToday)} onClick={() => setKnockTarget(m)}>
+                              <Hand size={15} />ขอคุย
+                            </button>
+                          )}
+                        </div>
                       )}
                     </article>
                   ))}
+                </div>
+              )}
+
+              {/* PAGE: Team Chat & Direct Message (DM) */}
+              {page === 'chat' && (
+                <div className="chat-container">
+                  {/* Top Level Chat Tabs: Rooms Chat vs Direct Messages */}
+                  <div className="chat-filter-tabs">
+                    <button
+                      type="button"
+                      className={`chat-filter-tab-btn ${chatTab === 'rooms' ? 'active' : ''}`}
+                      onClick={() => setChatTab('rooms')}
+                    >
+                      <MessageCircle size={15} />
+                      <span>แชทในห้องทำงาน</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`chat-filter-tab-btn ${chatTab === 'dm' ? 'active' : ''}`}
+                      onClick={() => setChatTab('dm')}
+                    >
+                      <Users size={15} />
+                      <span>ข้อความส่วนตัว (DM)</span>
+                      {unreadDmCount > 0 && (
+                        <span className="chat-filter-badge">{unreadDmCount}</span>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* TAB 1: ROOM CHAT */}
+                  {chatTab === 'rooms' && (
+                    <div className="room-chat-layout">
+                      {/* Room Selector Pills */}
+                      <div className="chat-room-pills-row">
+                        {rooms.map(r => {
+                          const isSelected = chatSelectedRoom === r.id;
+                          const isFocus = r.id === 'focus';
+                          const occupantsCount = online.filter(m => m.room === r.id).length;
+                          const isMyCurrentRoom = me.room === r.id;
+                          return (
+                            <button
+                              key={r.id}
+                              type="button"
+                              className={`chat-room-pill ${isSelected ? 'active' : ''} ${isFocus ? 'focus-pill' : ''}`}
+                              onClick={() => setChatSelectedRoom(r.id as any)}
+                            >
+                              <span className="room-pill-icon">
+                                {isFocus ? <Lock size={14} /> : <Home size={14} />}
+                              </span>
+                              <span className="room-pill-name">{r.name}</span>
+                              {isFocus ? (
+                                <span className="room-pill-badge focus-mute" title="ปิดแชทห้องเพื่อสมาธิ">
+                                  ปิดแชท
+                                </span>
+                              ) : (
+                                <span className="room-pill-badge" title={`${occupantsCount} คนออนไลน์ในห้องนี้`}>
+                                  {occupantsCount} คน
+                                </span>
+                              )}
+                              {isMyCurrentRoom && <span className="my-room-indicator" title="คุณอยู่ในห้องนี้">•</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Focus Zone Tranquil State Card */}
+                      {chatSelectedRoom === 'focus' ? (
+                        <div className="focus-quiet-state-card">
+                          <div className="focus-quiet-icon-circle">
+                            <Lock size={28} color="#64748b" />
+                          </div>
+                          <h3>Focus Zone — โซนสมาธิส่วนตัว (ปิดระบบแชทห้อง)</h3>
+                          <p>
+                            ห้อง Focus Zone สงวนไว้สำหรับการทำงานที่ต้องใช้สมาธิขั้นสูง (Deep Work)
+                            ระบบจึงปิดช่องสนทนาประจำห้องเพื่อไม่ให้มีเสียงหรือข้อความรบกวนสมาธิของสมาชิกในห้อง
+                          </p>
+                          <div className="focus-quiet-tips">
+                            <p><strong>💡 ต้องการติดต่อเพื่อนในห้อง Focus Zone:</strong></p>
+                            <ul>
+                              <li>ส่งเป็น <strong>Direct Message (DM)</strong> เพื่อให้เพื่อนเปิดอ่านเมื่อสะดวก (ระบบไม่ส่งเสียงรบกวน)</li>
+                              <li>หากเป็นเรื่องด่วนฉุกเฉิน สามารถโทรเข้าเบอร์โทรศัพท์มือถือโดยตรงได้ทันที</li>
+                            </ul>
+                          </div>
+                          <div style={{ marginTop: '20px' }}>
+                            <button
+                              type="button"
+                              className="primary"
+                              onClick={() => setChatTab('dm')}
+                            >
+                              <MessageSquare size={16} /> ไปที่ระบบ Direct Message (DM)
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Active Room Chat View */
+                        <div className="room-chat-active-card">
+                          {/* Room Header */}
+                          {(() => {
+                            const curRoom = rooms.find(r => r.id === chatSelectedRoom);
+                            const curOccupants = online.filter(m => m.room === chatSelectedRoom);
+                            const isMyRoom = me.room === chatSelectedRoom;
+                            return (
+                              <div className="room-chat-card-header">
+                                <div className="room-header-left">
+                                  <strong>{curRoom?.name || 'ห้องทำงาน'}</strong>
+                                  <small>
+                                    {curRoom?.description} · สมาชิกในห้อง {curOccupants.length} คน
+                                    {isMyRoom && <span className="room-status-badge my-room" style={{ marginLeft: '6px' }}>คุณอยู่ที่นี่</span>}
+                                  </small>
+                                </div>
+                                <div className="room-header-actions" style={{ display: 'flex', gap: '8px' }}>
+                                  {!isMyRoom && (
+                                    <button
+                                      type="button"
+                                      className="secondary room-switch-btn"
+                                      onClick={() => void updateProfile({ room_id: chatSelectedRoom })}
+                                    >
+                                      <DoorOpen size={13} /> ย้ายเข้าห้องนี้
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="secondary room-switch-btn"
+                                    onClick={() => joinHuddle(chatSelectedRoom)}
+                                    title="เข้าสายเสียงห้องนี้"
+                                  >
+                                    <Mic size={13} /> สายเสียง
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="primary room-switch-btn"
+                                    style={{ background: '#2563eb' }}
+                                    onClick={() => void startConference(chatSelectedRoom)}
+                                    title="ประชุมวิดีโอห้องนี้"
+                                  >
+                                    <Video size={13} /> ประชุมวิดีโอ
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Chat Stream */}
+                          <div className="chat-messages-container" ref={roomChatScrollRef}>
+                            {roomMessages.filter(m => m.roomId === chatSelectedRoom).length === 0 ? (
+                              <div className="chat-empty-state">
+                                <MessageCircle size={36} color="#cbd5e1" />
+                                <p>ยังไม่มีข้อความในห้องนี้ ทักทายเพื่อนๆ ได้เลย!</p>
+                              </div>
+                            ) : (
+                              roomMessages
+                                .filter(m => m.roomId === chatSelectedRoom)
+                                .map(msg => {
+                                  const isMine = msg.senderId === me.id;
+                                  return (
+                                    <div
+                                      key={msg.id}
+                                      className={`chat-message-row ${isMine ? 'mine' : 'theirs'}`}
+                                    >
+                                      {!isMine && (
+                                        <div className="chat-msg-avatar">
+                                          {msg.senderAvatar && (msg.senderAvatar.startsWith('http') || msg.senderAvatar.startsWith('data:')) ? (
+                                            <img src={msg.senderAvatar} alt={msg.senderName} className="chat-avatar-img" />
+                                          ) : (
+                                            <span className="chat-avatar-emoji">{msg.senderAvatar || '👨🏻‍💻'}</span>
+                                          )}
+                                        </div>
+                                      )}
+                                      <div className="chat-msg-bubble-wrap">
+                                        {!isMine && (
+                                          <div className="chat-msg-sender-name">
+                                            <strong>{msg.senderName}</strong>
+                                            <small>{formatThaiTime(new Date(msg.createdAt))}</small>
+                                          </div>
+                                        )}
+                                        <div className={`chat-msg-bubble ${isMine ? 'mine' : 'theirs'}`}>
+                                          <p>{msg.message}</p>
+                                          {isMine && (
+                                            <div className="chat-msg-time">
+                                              <span>{formatThaiTime(new Date(msg.createdAt))}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                            )}
+                          </div>
+
+                          {/* Quick Emojis & Chat Input Bar */}
+                          <div className="chat-input-wrapper">
+                            <div className="chat-quick-emojis">
+                              {['👍', '🙏', '❤️', '🔥', '🎉', '☕', '👀', '💯'].map(emoji => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  className="emoji-pill"
+                                  onClick={() => setRoomMessageDraft(prev => prev + emoji)}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                            <form className="chat-input-bar" onSubmit={handleSendRoomMessage}>
+                              <input
+                                type="text"
+                                value={roomMessageDraft}
+                                onChange={e => setRoomMessageDraft(e.target.value)}
+                                placeholder={`พิมพ์ข้อความในห้อง ${rooms.find(r => r.id === chatSelectedRoom)?.name || ''}... (Enter เพื่อส่ง)`}
+                                maxLength={500}
+                              />
+                              <button
+                                type="submit"
+                                className="chat-send-btn"
+                                disabled={!roomMessageDraft.trim()}
+                                title="ส่งข้อความ"
+                              >
+                                <Send size={16} />
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB 2: DIRECT MESSAGES (DM) */}
+                  {chatTab === 'dm' && (
+                    <div className="dm-system-wrapper">
+                      {/* Left: Member Directory */}
+                      <aside className={`dm-sidebar ${chatSelectedPeerId ? 'mobile-hidden' : ''}`}>
+                        <div className="dm-search-bar">
+                          <Search size={14} color="#94a3b8" />
+                          <input
+                            type="text"
+                            value={dmSearch}
+                            onChange={e => setDmSearch(e.target.value)}
+                            placeholder="ค้นหาชื่อหรือตำแหน่งเพื่อนร่วมงาน..."
+                          />
+                          {dmSearch && (
+                            <button
+                              type="button"
+                              className="icon-button"
+                              onClick={() => setDmSearch('')}
+                              style={{ padding: '2px', height: 'auto' }}
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="dm-members-list">
+                          {members
+                            .filter(m => m.id !== me.id)
+                            .filter(m => {
+                              if (!dmSearch.trim()) return true;
+                              const q = dmSearch.toLowerCase();
+                              return m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q);
+                            })
+                            .map(peer => {
+                              const isSelected = chatSelectedPeerId === peer.id;
+                              const unreadCount = peerUnreadCounts[peer.id] || 0;
+                              // Find latest message between me and peer
+                              const lastMsg = [...directMessages]
+                                .filter(m => (m.senderId === me.id && m.recipientId === peer.id) || (m.senderId === peer.id && m.recipientId === me.id))
+                                .pop();
+
+                              return (
+                                <div
+                                  key={peer.id}
+                                  className={`dm-member-card ${isSelected ? 'active' : ''}`}
+                                  onClick={() => openDirectMessage(peer.id)}
+                                >
+                                  <div className="dm-member-avatar-wrap">
+                                    <Avatar member={peer} small />
+                                  </div>
+                                  <div className="dm-member-info">
+                                    <div className="dm-member-top">
+                                      <strong>{peer.name}</strong>
+                                      {lastMsg && (
+                                        <small>{formatThaiTime(new Date(lastMsg.createdAt))}</small>
+                                      )}
+                                    </div>
+                                    <div className="dm-member-bottom">
+                                      <span className="dm-last-msg">
+                                        {lastMsg ? (
+                                          lastMsg.senderId === me.id ? `คุณ: ${lastMsg.message}` : lastMsg.message
+                                        ) : (
+                                          <span style={{ color: '#94a3b8' }}>{peer.role}</span>
+                                        )}
+                                      </span>
+                                      {unreadCount > 0 && (
+                                        <span className="dm-unread-badge">{unreadCount}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </aside>
+
+                      {/* Right: DM Chat Panel */}
+                      <main className={`dm-chat-panel ${!chatSelectedPeerId ? 'mobile-hidden' : ''}`}>
+                        {!chatSelectedPeerId ? (
+                          <div className="dm-no-selection-card">
+                            <div className="focus-quiet-icon-circle">
+                              <MessageSquare size={28} color="#2563eb" />
+                            </div>
+                            <h3>Direct Message (แชทส่วนตัว)</h3>
+                            <p>เลือกเพื่อนร่วมงานจากรายชื่อทางซ้ายเพื่อเริ่มการสนทนาส่วนตัวแบบ 1 ต่อ 1 ปลอดภัย เป็นส่วนตัว และซิงก์เรียลไทม์</p>
+                          </div>
+                        ) : (
+                          (() => {
+                            const peer = members.find(m => m.id === chatSelectedPeerId);
+                            const peerMessages = directMessages.filter(
+                              m => (m.senderId === me.id && m.recipientId === chatSelectedPeerId) ||
+                                   (m.senderId === chatSelectedPeerId && m.recipientId === me.id)
+                            );
+                            const isPeerInFocus = peer?.room === 'focus';
+
+                            return (
+                              <div className="dm-thread-card">
+                                {/* Thread Header */}
+                                <div className="dm-thread-header">
+                                  <button
+                                    type="button"
+                                    className="dm-back-mobile-btn icon-button"
+                                    onClick={() => setChatSelectedPeerId(null)}
+                                    title="ย้อนกลับไปรายชื่อ"
+                                  >
+                                    <ArrowLeft size={16} />
+                                  </button>
+                                  {peer && <Avatar member={peer} small />}
+                                  <div className="dm-peer-title-wrap">
+                                    <strong>{peer?.name || 'เพื่อนร่วมงาน'}</strong>
+                                    <small>
+                                      {peer?.role} · {peer?.online ? `${statuses[peer?.status || 'available']} (${rooms.find(r => r.id === peer?.room)?.name})` : 'ออฟไลน์'}
+                                    </small>
+                                  </div>
+                                  {isPeerInFocus && (
+                                    <span className="dm-focus-peer-tag" title="เพื่อนอยู่ในห้อง Focus Zone ระบบจะส่งข้อความให้ตามปกติแต่จะไม่ส่งเสียงดังรบกวน">
+                                      🤫 อยู่ในห้อง Focus Zone
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Thread Messages Container */}
+                                <div className="chat-messages-container" ref={dmScrollRef}>
+                                  {peerMessages.length === 0 ? (
+                                    <div className="chat-empty-state">
+                                      <MessageSquare size={36} color="#cbd5e1" />
+                                      <p>ยังไม่มีข้อความสนทนากับ {peer?.name} เริ่มทักทายได้เลย 👋</p>
+                                    </div>
+                                  ) : (
+                                    peerMessages.map(msg => {
+                                      const isMine = msg.senderId === me.id;
+                                      return (
+                                        <div
+                                          key={msg.id}
+                                          className={`chat-message-row ${isMine ? 'mine' : 'theirs'}`}
+                                        >
+                                          {!isMine && (
+                                            <div className="chat-msg-avatar">
+                                              {peer?.avatarUrl && (peer.avatarUrl.startsWith('http') || peer.avatarUrl.startsWith('data:')) ? (
+                                                <img src={peer.avatarUrl} alt={peer.name} className="chat-avatar-img" />
+                                              ) : (
+                                                <span className="chat-avatar-emoji">{peer?.avatarUrl || '👨🏻‍💻'}</span>
+                                              )}
+                                            </div>
+                                          )}
+                                          <div className="chat-msg-bubble-wrap">
+                                            <div className={`chat-msg-bubble ${isMine ? 'mine' : 'theirs'}`}>
+                                              <p>{msg.message}</p>
+                                              <div className="dm-bubble-footer">
+                                                <span className="chat-msg-time">{formatThaiTime(new Date(msg.createdAt))}</span>
+                                                {isMine && (
+                                                  <span className="dm-read-status" title={msg.isRead ? 'อ่านแล้ว' : 'ส่งแล้ว'}>
+                                                    {msg.isRead ? '✓✓ อ่านแล้ว' : '✓ ส่งแล้ว'}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+
+                                {/* Thread Input Form */}
+                                <div className="chat-input-wrapper">
+                                  <div className="chat-quick-emojis">
+                                    {['👍', '🙏', '❤️', '🔥', '🎉', '☕', '👀', '💯'].map(emoji => (
+                                      <button
+                                        key={emoji}
+                                        type="button"
+                                        className="emoji-pill"
+                                        onClick={() => setDmDraft(prev => prev + emoji)}
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <form className="chat-input-bar" onSubmit={handleSendDirectMessage}>
+                                    <input
+                                      type="text"
+                                      value={dmDraft}
+                                      onChange={e => setDmDraft(e.target.value)}
+                                      placeholder={`ส่ง Direct Message ถึง ${peer?.name || 'เพื่อนร่วมงาน'}... (Enter เพื่อส่ง)`}
+                                      maxLength={500}
+                                    />
+                                    <button
+                                      type="submit"
+                                      className="chat-send-btn"
+                                      disabled={!dmDraft.trim()}
+                                      title="ส่งข้อความส่วนตัว"
+                                    >
+                                      <Send size={16} />
+                                    </button>
+                                  </form>
+                                </div>
+                              </div>
+                            );
+                          })()
+                        )}
+                      </main>
+                    </div>
+                  )}
                 </div>
               )}
 

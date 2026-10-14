@@ -137,3 +137,121 @@ export const sampleAttendance: AttendanceRecord[] = [
   { id: 'att-6', user_id: 'ploy', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(9, 19, 0)).toISOString(), status: 'late' },
   { id: 'att-7', user_id: 'art', work_date: new Date().toISOString().slice(0, 10), check_in_at: new Date(new Date().setHours(8, 55, 0)).toISOString(), status: 'on_time' }
 ];
+
+export type RoomChatMessage = {
+  id: string;
+  roomId: 'hub' | 'project' | 'coffee';
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  message: string;
+  content?: string;
+  createdAt: string;
+};
+
+export type DirectMessage = {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  recipientId: string;
+  recipientName: string;
+  recipientAvatar?: string;
+  message: string;
+  content?: string;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export const sampleRoomMessages: RoomChatMessage[] = [
+  {
+    id: 'rm-1',
+    roomId: 'hub',
+    senderId: 'may',
+    senderName: 'เมย์',
+    senderAvatar: '👩🏻‍💻',
+    message: 'สวัสดีทุกคนค่า วันนี้เตรียมสรุปงานสปรินต์ประจำสัปดาห์กันนะคะ ✨',
+    content: 'สวัสดีทุกคนค่า วันนี้เตรียมสรุปงานสปรินต์ประจำสัปดาห์กันนะคะ ✨',
+    createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
+  },
+  {
+    id: 'rm-2',
+    roomId: 'hub',
+    senderId: 'ton',
+    senderName: 'ต้น',
+    senderAvatar: '👨🏻‍💻',
+    message: 'ครับผม หน้าแดชบอร์ดงานและแชทห้องพร้อมใช้งานแล้วครับ 👍',
+    content: 'ครับผม หน้าแดชบอร์ดงานและแชทห้องพร้อมใช้งานแล้วครับ 👍',
+    createdAt: new Date(Date.now() - 3600000 * 1.5).toISOString()
+  },
+  {
+    id: 'rm-3',
+    roomId: 'project',
+    senderId: 'nan',
+    senderName: 'แนน',
+    senderAvatar: '👩🏻‍💼',
+    message: 'เอกสารข้อกำหนดระบบของลูกค้าส่งให้ตรวจในโฟลเดอร์เรียบร้อยแล้วค่ะ',
+    content: 'เอกสารข้อกำหนดระบบของลูกค้าส่งให้ตรวจในโฟลเดอร์เรียบร้อยแล้วค่ะ',
+    createdAt: new Date(Date.now() - 3600000 * 3).toISOString()
+  },
+  {
+    id: 'rm-4',
+    roomId: 'project',
+    senderId: 'kong',
+    senderName: 'ก้อง',
+    senderAvatar: '👨🏻‍🎨',
+    message: 'รับทราบครับ กำลังดูรายละเอียดเพื่อประเมินเวลาครับ',
+    content: 'รับทราบครับ กำลังดูรายละเอียดเพื่อประเมินเวลาครับ',
+    createdAt: new Date(Date.now() - 3600000 * 2.8).toISOString()
+  },
+  {
+    id: 'rm-5',
+    roomId: 'coffee',
+    senderId: 'beam',
+    senderName: 'บีม',
+    senderAvatar: '👩🏻‍🎨',
+    message: 'ใครทำงานเหนื่อยๆ แวะมาชงกาแฟหรือชาได้นะ มีขนมมาฝากที่บาร์ค่ะ ☕🥐',
+    content: 'ใครทำงานเหนื่อยๆ แวะมาชงกาแฟหรือชาได้นะ มีขนมมาฝากที่บาร์ค่ะ ☕🥐',
+    createdAt: new Date(Date.now() - 3600000 * 0.8).toISOString()
+  }
+];
+
+export const sampleDirectMessages: DirectMessage[] = [
+  {
+    id: 'dm-1',
+    senderId: 'may',
+    senderName: 'เมย์',
+    senderAvatar: '👩🏻‍💻',
+    recipientId: 'me',
+    recipientName: 'คุณ',
+    message: 'สวัสดีค่ะ รบกวนปรึกษาเรื่องแผนงานสำหรับช่วงบ่ายนี้หน่อยได้ไหมคะ?',
+    content: 'สวัสดีค่ะ รบกวนปรึกษาเรื่องแผนงานสำหรับช่วงบ่ายนี้หน่อยได้ไหมคะ?',
+    isRead: false,
+    createdAt: new Date(Date.now() - 1800000).toISOString()
+  },
+  {
+    id: 'dm-2',
+    senderId: 'me',
+    senderName: 'คุณ',
+    recipientId: 'may',
+    recipientName: 'เมย์',
+    recipientAvatar: '👩🏻‍💻',
+    message: 'ยินดีเลยครับ สะดวกช่วง 14:00 น. หรือจะคุยในห้อง Project Room ก็ได้ครับ',
+    content: 'ยินดีเลยครับ สะดวกช่วง 14:00 น. หรือจะคุยในห้อง Project Room ก็ได้ครับ',
+    isRead: true,
+    createdAt: new Date(Date.now() - 1200000).toISOString()
+  },
+  {
+    id: 'dm-3',
+    senderId: 'ton',
+    senderName: 'ต้น',
+    senderAvatar: '👨🏻‍💻',
+    recipientId: 'me',
+    recipientName: 'คุณ',
+    message: 'เช็คฟังก์ชันแชทห้องและ DM แล้ว ใช้งานลื่นไหลดีมากเลยครับ 🚀',
+    content: 'เช็คฟังก์ชันแชทห้องและ DM แล้ว ใช้งานลื่นไหลดีมากเลยครับ 🚀',
+    isRead: true,
+    createdAt: new Date(Date.now() - 600000).toISOString()
+  }
+];
+

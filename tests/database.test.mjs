@@ -85,5 +85,41 @@ test('database permissions and office workflows',async(t)=>{
     const broadcast = (await db.query('select * from public.urgent_broadcasts where id=$1',[bId])).rows[0];
     assert.equal(broadcast.message,'ประชุมด่วน 5 นาทีครับ!');
   });
+  await t.test('room chat in hub/project/coffee, focus chat disabled, and direct message privacy',async()=>{
+    await asUser(member);
+    // 1. Room Chat in hub
+    const rmId = (await db.query("select public.send_room_message('hub','สวัสดีทีม Hub!') as id")).rows[0].id;
+    assert.ok(rmId);
+    const rMsg = (await db.query('select * from public.room_messages where id=$1',[rmId])).rows[0];
+    assert.equal(rMsg.room_id,'hub');
+    assert.equal(rMsg.content,'สวัสดีทีม Hub!');
+
+    // 2. Room Chat in Focus Zone must fail
+    await assert.rejects(db.query("select public.send_room_message('focus','ห้ามแชทในนี้')"),/focus_chat_disabled/);
+
+    // 3. Direct Message between member and admin
+    const dmId = (await db.query("select public.send_direct_message($1,'ข้อความส่วนตัวถึงแอดมิน') as id",[admin])).rows[0].id;
+    assert.ok(dmId);
+
+    // Sender can read their DM
+    let memberDMs = (await db.query('select * from public.direct_messages where id=$1',[dmId])).rows;
+    assert.equal(memberDMs.length,1);
+    assert.equal(memberDMs[0].content,'ข้อความส่วนตัวถึงแอดมิน');
+    assert.equal(memberDMs[0].is_read,false);
+
+    // Recipient (admin) can read DM and mark as read
+    await asUser(admin);
+    let adminDMs = (await db.query('select * from public.direct_messages where id=$1',[dmId])).rows;
+    assert.equal(adminDMs.length,1);
+    await db.query('select public.mark_direct_messages_read($1)',[member]);
+    adminDMs = (await db.query('select * from public.direct_messages where id=$1',[dmId])).rows;
+    assert.equal(adminDMs[0].is_read,true);
+
+    // Outsider cannot see member/admin DM (RLS privacy)
+    await asUser(outsider);
+    let outsiderDMs = (await db.query('select * from public.direct_messages where id=$1',[dmId])).rows;
+    assert.equal(outsiderDMs.length,0);
+  });
   await db.close();
 });
+
