@@ -6,7 +6,8 @@ import {
   List, Wifi, WifiOff, CalendarCheck, Clock, CheckCircle2, AlertCircle, Plus, Trash2,
   Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles,
   Maximize2, Minimize2, Camera, Heart, ThumbsUp, CheckSquare, MessageSquare, Send,
-  Zap, AlertTriangle, Calendar, UserCheck, Square, MessageCircle, Lock, Search, ArrowLeft
+  Zap, AlertTriangle, Calendar, UserCheck, Square, MessageCircle, Lock, Search, ArrowLeft,
+  Image as ImageIcon, Download
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import {
@@ -91,6 +92,48 @@ export function getDeadlineStatus(dueDate?: string, dueTime?: string, status?: s
 
   const daysRemaining = Math.ceil((dueDateTime.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   return { label: `เหลืออีก ${daysRemaining} วัน`, type: 'normal', text: `📅 กำหนดส่ง: ${dueDate} ${dueTime || ''}` };
+}
+
+export function compressChatImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('กรุณาเลือกไฟล์รูปภาพเท่านั้น'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('ไม่สามารถอ่านไฟล์รูปภาพได้'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('ไฟล์รูปภาพไม่ถูกต้อง'));
+      img.onload = () => {
+        const maxDim = 1200;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(reader.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const isPng = file.type === 'image/png' && file.size < 400000;
+        const dataUrl = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.82);
+        resolve(dataUrl);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 const defaultTasks: TaskItem[] = [
@@ -451,7 +494,12 @@ export default function App() {
   const [roomMessageDraft, setRoomMessageDraft] = useState('');
   const [dmDraft, setDmDraft] = useState('');
   const [dmSearch, setDmSearch] = useState('');
+  const [roomImageAttachment, setRoomImageAttachment] = useState<string | null>(null);
+  const [dmImageAttachment, setDmImageAttachment] = useState<string | null>(null);
+  const [activeImageModal, setActiveImageModal] = useState<string | null>(null);
 
+  const roomFileInputRef = useRef<HTMLInputElement>(null);
+  const dmFileInputRef = useRef<HTMLInputElement>(null);
   const roomChatScrollRef = useRef<HTMLDivElement>(null);
   const dmScrollRef = useRef<HTMLDivElement>(null);
 
@@ -466,6 +514,15 @@ export default function App() {
       dmScrollRef.current.scrollTop = dmScrollRef.current.scrollHeight;
     }
   }, [directMessages, chatSelectedPeerId, chatTab]);
+
+  useEffect(() => {
+    if (!activeImageModal) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActiveImageModal(null);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [activeImageModal]);
 
   // Attendance & Leave State
   const todayDateStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -646,7 +703,9 @@ export default function App() {
         senderId: r.sender_id,
         senderName: r.sender_name,
         senderAvatar: r.sender_avatar,
-        message: r.message,
+        message: r.content || r.message || '',
+        content: r.content || r.message || '',
+        imageUrl: r.image_url || undefined,
         createdAt: r.created_at
       })));
     }
@@ -661,7 +720,9 @@ export default function App() {
         recipientId: r.recipient_id,
         recipientName: r.recipient_name,
         recipientAvatar: r.recipient_avatar,
-        message: r.message,
+        message: r.content || r.message || '',
+        content: r.content || r.message || '',
+        imageUrl: r.image_url || undefined,
         createdAt: r.created_at,
         isRead: r.is_read
       })));
@@ -1649,10 +1710,79 @@ export default function App() {
   };
 
   // Room Chat & Direct Message Handlers
+  const handleRoomImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressChatImage(file);
+      setRoomImageAttachment(compressed);
+    } catch (err: any) {
+      setError(err?.message || 'ไม่สามารถแนบรูปภาพได้');
+    } finally {
+      if (roomFileInputRef.current) roomFileInputRef.current.value = '';
+    }
+  };
+
+  const handleRoomPaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          try {
+            const compressed = await compressChatImage(file);
+            setRoomImageAttachment(compressed);
+            notify('แนบรูปภาพจากคลิปบอร์ดเรียบร้อย 📸');
+          } catch (err: any) {
+            setError(err?.message || 'ไม่สามารถประมวลผลรูปภาพได้');
+          }
+          break;
+        }
+      }
+    }
+  };
+
+  const handleDmImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressChatImage(file);
+      setDmImageAttachment(compressed);
+    } catch (err: any) {
+      setError(err?.message || 'ไม่สามารถแนบรูปภาพได้');
+    } finally {
+      if (dmFileInputRef.current) dmFileInputRef.current.value = '';
+    }
+  };
+
+  const handleDmPaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          try {
+            const compressed = await compressChatImage(file);
+            setDmImageAttachment(compressed);
+            notify('แนบรูปภาพจากคลิปบอร์ดเรียบร้อย 📸');
+          } catch (err: any) {
+            setError(err?.message || 'ไม่สามารถประมวลผลรูปภาพได้');
+          }
+          break;
+        }
+      }
+    }
+  };
+
   const handleSendRoomMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const text = roomMessageDraft.trim();
-    if (!text) return;
+    const img = roomImageAttachment;
+    if (!text && !img) return;
 
     if (chatSelectedRoom === 'focus') {
       setError('ห้อง Focus Zone เป็นพื้นที่งดใช้เสียงและปิดแชทห้องเพื่อสมาธิการทำงาน');
@@ -1666,10 +1796,13 @@ export default function App() {
       senderName: me.name,
       senderAvatar: me.avatarUrl,
       message: text,
+      content: text,
+      imageUrl: img || undefined,
       createdAt: new Date().toISOString()
     };
 
     setRoomMessageDraft('');
+    setRoomImageAttachment(null);
     setRoomMessages(prev => [...prev, newMsg]);
 
     if (demo || !supabase || !session) {
@@ -1692,7 +1825,8 @@ export default function App() {
 
     const { error: rpcErr } = await supabase.rpc('send_room_message', {
       p_room_id: chatSelectedRoom,
-      p_message: text
+      p_message: text,
+      p_image_url: img || null
     });
     if (rpcErr) {
       console.error('send_room_message err:', rpcErr);
@@ -1719,7 +1853,8 @@ export default function App() {
   const handleSendDirectMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const text = dmDraft.trim();
-    if (!text || !chatSelectedPeerId) return;
+    const img = dmImageAttachment;
+    if ((!text && !img) || !chatSelectedPeerId) return;
 
     const peer = members.find(m => m.id === chatSelectedPeerId);
     const newMsg: DirectMessage = {
@@ -1731,11 +1866,14 @@ export default function App() {
       recipientName: peer?.name || 'เพื่อนร่วมงาน',
       recipientAvatar: peer?.avatarUrl,
       message: text,
+      content: text,
+      imageUrl: img || undefined,
       createdAt: new Date().toISOString(),
       isRead: false
     };
 
     setDmDraft('');
+    setDmImageAttachment(null);
     setDirectMessages(prev => [...prev, newMsg]);
 
     if (demo || !supabase || !session) {
@@ -1758,7 +1896,8 @@ export default function App() {
 
     const { error: rpcErr } = await supabase.rpc('send_direct_message', {
       p_recipient_id: chatSelectedPeerId,
-      p_message: text
+      p_message: text,
+      p_image_url: img || null
     });
     if (rpcErr) {
       console.error('send_direct_message err:', rpcErr);
@@ -3036,7 +3175,12 @@ export default function App() {
                                           </div>
                                         )}
                                         <div className={`chat-msg-bubble ${isMine ? 'mine' : 'theirs'}`}>
-                                          <p>{msg.message}</p>
+                                          {msg.imageUrl && (
+                                            <div className="chat-msg-image-wrap" onClick={() => setActiveImageModal(msg.imageUrl!)}>
+                                              <img src={msg.imageUrl} alt="รูปภาพแนบในแชท" className="chat-msg-img" loading="lazy" />
+                                            </div>
+                                          )}
+                                          {msg.message && <p>{msg.message}</p>}
                                           {isMine && (
                                             <div className="chat-msg-time">
                                               <span>{formatThaiTime(new Date(msg.createdAt))}</span>
@@ -3052,6 +3196,31 @@ export default function App() {
 
                           {/* Quick Emojis & Chat Input Bar */}
                           <div className="chat-input-wrapper">
+                            <input
+                              type="file"
+                              ref={roomFileInputRef}
+                              style={{ display: 'none' }}
+                              accept="image/*"
+                              onChange={handleRoomImageSelect}
+                            />
+                            {roomImageAttachment && (
+                              <div className="chat-attachment-preview">
+                                <div className="attachment-thumb-wrap">
+                                  <img src={roomImageAttachment} alt="Preview" className="attachment-thumb" />
+                                  <button
+                                    type="button"
+                                    className="attachment-remove-btn"
+                                    onClick={() => setRoomImageAttachment(null)}
+                                    title="ยกเลิกรูปภาพนี้"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                                <span className="attachment-label">
+                                  <ImageIcon size={14} color="#2563eb" /> พร้อมส่งรูปภาพนี้ (Enter เพื่อส่งพร้อมข้อความ)
+                                </span>
+                              </div>
+                            )}
                             <div className="chat-quick-emojis">
                               {['👍', '🙏', '❤️', '🔥', '🎉', '☕', '👀', '💯'].map(emoji => (
                                 <button
@@ -3065,17 +3234,26 @@ export default function App() {
                               ))}
                             </div>
                             <form className="chat-input-bar" onSubmit={handleSendRoomMessage}>
+                              <button
+                                type="button"
+                                className={`chat-attach-btn ${roomImageAttachment ? 'has-file' : ''}`}
+                                onClick={() => roomFileInputRef.current?.click()}
+                                title="แนบรูปภาพ หรือกด Ctrl+V วางรูปได้ทันที"
+                              >
+                                <Camera size={18} />
+                              </button>
                               <input
                                 type="text"
                                 value={roomMessageDraft}
                                 onChange={e => setRoomMessageDraft(e.target.value)}
-                                placeholder={`พิมพ์ข้อความในห้อง ${rooms.find(r => r.id === chatSelectedRoom)?.name || ''}... (Enter เพื่อส่ง)`}
+                                onPaste={handleRoomPaste}
+                                placeholder={`พิมพ์ข้อความในห้อง ${rooms.find(r => r.id === chatSelectedRoom)?.name || ''}... (Enter ส่ง, Ctrl+V วางรูป)`}
                                 maxLength={500}
                               />
                               <button
                                 type="submit"
                                 className="chat-send-btn"
-                                disabled={!roomMessageDraft.trim()}
+                                disabled={!roomMessageDraft.trim() && !roomImageAttachment}
                                 title="ส่งข้อความ"
                               >
                                 <Send size={16} />
@@ -3234,7 +3412,12 @@ export default function App() {
                                           )}
                                           <div className="chat-msg-bubble-wrap">
                                             <div className={`chat-msg-bubble ${isMine ? 'mine' : 'theirs'}`}>
-                                              <p>{msg.message}</p>
+                                              {msg.imageUrl && (
+                                                <div className="chat-msg-image-wrap" onClick={() => setActiveImageModal(msg.imageUrl!)}>
+                                                  <img src={msg.imageUrl} alt="รูปภาพแนบในแชท" className="chat-msg-img" loading="lazy" />
+                                                </div>
+                                              )}
+                                              {msg.message && <p>{msg.message}</p>}
                                               <div className="dm-bubble-footer">
                                                 <span className="chat-msg-time">{formatThaiTime(new Date(msg.createdAt))}</span>
                                                 {isMine && (
@@ -3253,6 +3436,31 @@ export default function App() {
 
                                 {/* Thread Input Form */}
                                 <div className="chat-input-wrapper">
+                                  <input
+                                    type="file"
+                                    ref={dmFileInputRef}
+                                    style={{ display: 'none' }}
+                                    accept="image/*"
+                                    onChange={handleDmImageSelect}
+                                  />
+                                  {dmImageAttachment && (
+                                    <div className="chat-attachment-preview">
+                                      <div className="attachment-thumb-wrap">
+                                        <img src={dmImageAttachment} alt="Preview" className="attachment-thumb" />
+                                        <button
+                                          type="button"
+                                          className="attachment-remove-btn"
+                                          onClick={() => setDmImageAttachment(null)}
+                                          title="ยกเลิกรูปภาพนี้"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                      <span className="attachment-label">
+                                        <ImageIcon size={14} color="#2563eb" /> พร้อมส่งรูปภาพนี้ (Enter เพื่อส่งพร้อมข้อความ)
+                                      </span>
+                                    </div>
+                                  )}
                                   <div className="chat-quick-emojis">
                                     {['👍', '🙏', '❤️', '🔥', '🎉', '☕', '👀', '💯'].map(emoji => (
                                       <button
@@ -3266,17 +3474,26 @@ export default function App() {
                                     ))}
                                   </div>
                                   <form className="chat-input-bar" onSubmit={handleSendDirectMessage}>
+                                    <button
+                                      type="button"
+                                      className={`chat-attach-btn ${dmImageAttachment ? 'has-file' : ''}`}
+                                      onClick={() => dmFileInputRef.current?.click()}
+                                      title="แนบรูปภาพ หรือกด Ctrl+V วางรูปได้ทันที"
+                                    >
+                                      <Camera size={18} />
+                                    </button>
                                     <input
                                       type="text"
                                       value={dmDraft}
                                       onChange={e => setDmDraft(e.target.value)}
-                                      placeholder={`ส่ง Direct Message ถึง ${peer?.name || 'เพื่อนร่วมงาน'}... (Enter เพื่อส่ง)`}
+                                      onPaste={handleDmPaste}
+                                      placeholder={`ส่ง Direct Message ถึง ${peer?.name || 'เพื่อนร่วมงาน'}... (Enter ส่ง, Ctrl+V วางรูป)`}
                                       maxLength={500}
                                     />
                                     <button
                                       type="submit"
                                       className="chat-send-btn"
-                                      disabled={!dmDraft.trim()}
+                                      disabled={!dmDraft.trim() && !dmImageAttachment}
                                       title="ส่งข้อความส่วนตัว"
                                     >
                                       <Send size={16} />
@@ -4357,6 +4574,34 @@ export default function App() {
         />
       )}
 
+
+      {/* 7. CHAT IMAGE FULL-SIZE LIGHTBOX MODAL */}
+      {activeImageModal && (
+        <div className="chat-image-lightbox-overlay" onClick={() => setActiveImageModal(null)}>
+          <div className="lightbox-content" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              className="lightbox-close-btn"
+              onClick={() => setActiveImageModal(null)}
+              title="ปิดรูปภาพ (ESC หรือคลิกปุ่ม)"
+            >
+              <X size={20} />
+            </button>
+            <img src={activeImageModal} alt="รูปภาพขนาดเต็ม" className="lightbox-img" />
+            <div className="lightbox-actions">
+              <a
+                href={activeImageModal}
+                download={`prime-chat-image-${Date.now()}.png`}
+                className="lightbox-download-btn"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Download size={14} /> ดาวน์โหลดรูปภาพ
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Alert */}
       {toast && (

@@ -119,6 +119,32 @@ test('database permissions and office workflows',async(t)=>{
     await asUser(outsider);
     let outsiderDMs = (await db.query('select * from public.direct_messages where id=$1',[dmId])).rows;
     assert.equal(outsiderDMs.length,0);
+
+    // 4. Room Chat with image attachment (and empty text with image)
+    await asUser(member);
+    const rmImgId = (await db.query("select public.send_room_message('project','ส่งรูปงานแบบร่าง','data:image/png;base64,sample') as id")).rows[0].id;
+    assert.ok(rmImgId);
+    const rmImgRow = (await db.query('select * from public.room_messages where id=$1',[rmImgId])).rows[0];
+    assert.equal(rmImgRow.room_id,'project');
+    assert.equal(rmImgRow.content,'ส่งรูปงานแบบร่าง');
+    assert.equal(rmImgRow.image_url,'data:image/png;base64,sample');
+
+    // Empty text with image is allowed
+    const rmOnlyImgId = (await db.query("select public.send_room_message('coffee','','data:image/jpeg;base64,sample') as id")).rows[0].id;
+    assert.ok(rmOnlyImgId);
+
+    // Empty text without image must be rejected
+    await assert.rejects(db.query("select public.send_room_message('coffee','',null)"),/invalid_content/);
+
+    // 5. Direct Message with image attachment
+    const dmImgId = (await db.query("select public.send_direct_message($1,'ส่งรูปภาพประกอบ',$2) as id",[admin,'data:image/png;base64,dmphoto'])).rows[0].id;
+    assert.ok(dmImgId);
+    const dmImgRow = (await db.query('select * from public.direct_messages where id=$1',[dmImgId])).rows[0];
+    assert.equal(dmImgRow.content,'ส่งรูปภาพประกอบ');
+    assert.equal(dmImgRow.image_url,'data:image/png;base64,dmphoto');
+
+    // Empty text without image in DM must be rejected
+    await assert.rejects(db.query("select public.send_direct_message($1,'',null)",[admin]),/invalid_content/);
   });
   await db.close();
 });

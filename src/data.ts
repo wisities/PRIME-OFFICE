@@ -146,6 +146,7 @@ export type RoomChatMessage = {
   senderAvatar?: string;
   message: string;
   content?: string;
+  imageUrl?: string;
   createdAt: string;
 };
 
@@ -159,6 +160,7 @@ export type DirectMessage = {
   recipientAvatar?: string;
   message: string;
   content?: string;
+  imageUrl?: string;
   isRead: boolean;
   createdAt: string;
 };
