@@ -2590,6 +2590,19 @@
 .flash-sender-avatar {
   font-size: 32px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flash-sender-avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #fcd34d;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
 }
 
 .flash-sender-meta strong {
@@ -2958,8 +2971,18 @@
 .creator-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   color: #1e293b;
+}
+
+.creator-av-img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .creator-time {
@@ -3035,6 +3058,16 @@
 .assignee-pill-avatar {
   font-size: 16px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.assignee-pill-avatar-img {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .assignee-pill-name {

@@ -2715,7 +2715,15 @@ export default function App() {
                                 <div className="task-card-creator">
                                   <span className="creator-label">ผู้มอบหมาย:</span>
                                   <span className="creator-badge">
-                                    {task.creatorAvatar ? <span className="creator-av-icon">{task.creatorAvatar}</span> : '👤'}
+                                    {(() => {
+                                      const av = task.creatorAvatar;
+                                      const isImg = av && (av.startsWith('http') || av.startsWith('data:'));
+                                      return isImg ? (
+                                        <img src={av} alt={task.creatorName} className="creator-av-img" />
+                                      ) : (
+                                        <span className="creator-av-icon">{av || '👤'}</span>
+                                      );
+                                    })()}
                                     <strong>{task.creatorName}</strong>
                                   </span>
                                   <small className="creator-time">· {formatPostTime(task.createdAt)}</small>
@@ -2741,7 +2749,15 @@ export default function App() {
                                       return (
                                         <div className={`assignee-pill-row ${a.completed ? 'completed' : 'pending'}`} key={a.id}>
                                           <div className="assignee-pill-left">
-                                            {a.avatar ? <span className="assignee-pill-avatar">{a.avatar}</span> : <span className="assignee-pill-avatar">👤</span>}
+                                            {(() => {
+                                              const av = a.avatar;
+                                              const isImg = av && (av.startsWith('http') || av.startsWith('data:'));
+                                              return isImg ? (
+                                                <img src={av} alt={a.name} className="assignee-pill-avatar-img" />
+                                              ) : (
+                                                <span className="assignee-pill-avatar">{av || '👤'}</span>
+                                              );
+                                            })()}
                                             <span className="assignee-pill-name">{a.name}{isMe ? ' (คุณ)' : ''}</span>
                                           </div>
                                           {isMe ? (
@@ -3467,11 +3483,15 @@ export default function App() {
             </div>
 
             <div className="flash-sender-profile">
-              {urgentPopup.senderAvatar ? (
-                <span className="flash-sender-avatar">{urgentPopup.senderAvatar}</span>
-              ) : (
-                <span className="flash-sender-avatar">📢</span>
-              )}
+              {(() => {
+                const av = urgentPopup.senderAvatar;
+                const isImg = av && (av.startsWith('http') || av.startsWith('data:'));
+                return isImg ? (
+                  <img src={av} alt={urgentPopup.senderName} className="flash-sender-avatar-img" />
+                ) : (
+                  <span className="flash-sender-avatar">{av || '📢'}</span>
+                );
+              })()}
               <div className="flash-sender-meta">
                 <strong>{urgentPopup.senderName}</strong>
                 <small>{formatPostTime(urgentPopup.createdAt)}</small>
