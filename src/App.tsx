@@ -5,7 +5,8 @@ import {
   Coffee, Focus, Video, X, Check, LogOut, Bell, Menu, ShieldCheck, Save, Map, 
   List, Wifi, WifiOff, CalendarCheck, Clock, CheckCircle2, AlertCircle, Plus, Trash2,
   Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles,
-  Maximize2, Minimize2, Camera, Heart, ThumbsUp, CheckSquare, MessageSquare, Send
+  Maximize2, Minimize2, Camera, Heart, ThumbsUp, CheckSquare, MessageSquare, Send,
+  Zap, AlertTriangle, Calendar, UserCheck, Square
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import { 
@@ -18,9 +19,115 @@ import {
   getThaiPublicHoliday, getThaiHolidaysList, calculateWorkingDays, formatThaiFullDate,
   THAI_ANNUAL_FIXED_HOLIDAYS, THAI_MONTH_NAMES
 } from './domain.mjs';
-import { VoiceHuddleClient, playChime } from './voice';
+import { VoiceHuddleClient, playChime, playAlertChime } from './voice';
 import { VideoConferenceClient } from './conference';
 import { ConferenceModal } from './ConferenceModal';
+
+export interface TaskAssignee {
+  id: string;
+  name: string;
+  avatar?: string;
+  completed: boolean;
+  completedAt?: string;
+}
+
+export type TaskPriority = 'urgent' | 'normal' | 'low';
+export type TaskStatus = 'todo' | 'in_progress' | 'done';
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  dueTime?: string;
+  priority: TaskPriority;
+  creatorId: string;
+  creatorName: string;
+  creatorAvatar?: string;
+  assignees: TaskAssignee[];
+  status: TaskStatus;
+  createdAt: string;
+}
+
+export interface UrgentBroadcast {
+  id: string;
+  message: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  createdAt: string;
+}
+
+export function getDeadlineStatus(dueDate?: string, dueTime?: string, status?: string) {
+  if (status === 'done') {
+    return { label: 'เสร็จสิ้นแล้ว', type: 'done', text: '✅ ส่งมอบงานครบแล้ว' };
+  }
+  if (!dueDate) {
+    return { label: 'ไม่มีกำหนดส่ง', type: 'none', text: 'ไม่ระบุวันส่ง' };
+  }
+  
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const dueDateTimeStr = dueTime ? `${dueDate}T${dueTime}:00` : `${dueDate}T23:59:59`;
+  const dueDateTime = new Date(dueDateTimeStr);
+  const isPast = dueDateTime.getTime() < now.getTime();
+  
+  if (isPast) {
+    const diffHours = Math.floor((now.getTime() - dueDateTime.getTime()) / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    const timeText = diffDays > 0 ? `เกินกำหนด ${diffDays} วัน` : `เกินกำหนด ${diffHours || 1} ชม.`;
+    return { label: 'เกินกำหนดส่ง', type: 'overdue', text: `🔴 ${timeText} (${dueDate} ${dueTime || ''})` };
+  }
+
+  if (dueDate === today) {
+    return { label: 'กำหนดส่งวันนี้!', type: 'today', text: `⚠️ ส่งวันนี้ (${dueTime || 'สิ้นวัน'})` };
+  }
+
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (dueDate === tomorrow) {
+    return { label: 'กำหนดส่งพรุ่งนี้', type: 'soon', text: `⏰ ส่งพรุ่งนี้ (${dueTime || 'สิ้นวัน'})` };
+  }
+
+  const daysRemaining = Math.ceil((dueDateTime.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  return { label: `เหลืออีก ${daysRemaining} วัน`, type: 'normal', text: `📅 กำหนดส่ง: ${dueDate} ${dueTime || ''}` };
+}
+
+const defaultTasks: TaskItem[] = [
+  {
+    id: 'task-1',
+    title: 'ส่งมอบรายงานระบบ Virtual Office และ WebRTC ให้ลูกค้า',
+    description: 'รวบรวมสรุปผลการทดสอบการเชื่อมต่อไมค์ การแชร์หน้าจอ และระบบความปลอดภัย',
+    dueDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+    dueTime: '17:00',
+    priority: 'urgent',
+    creatorId: 'ton',
+    creatorName: 'ต้น (Dev Lead)',
+    creatorAvatar: '👨🏻‍💻',
+    assignees: [
+      { id: 'me', name: 'คุณ', completed: false },
+      { id: 'may', name: 'เมย์', avatar: '👩🏻‍💻', completed: true, completedAt: new Date().toISOString() },
+      { id: 'kong', name: 'ก้อง', avatar: '👨🏻‍🎨', completed: false }
+    ],
+    status: 'in_progress',
+    createdAt: new Date(Date.now() - 3600000 * 5).toISOString()
+  },
+  {
+    id: 'task-2',
+    title: 'อัปเดตกราฟิกและ Avatar ประจำตัวสมาชิกทีมไพร์ม',
+    description: 'เตรียมภาพไอคอนทีมและจัดเตรียมภาพประกอบห้องทำงานให้ครบทุกห้อง',
+    dueDate: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
+    dueTime: '12:00',
+    priority: 'normal',
+    creatorId: 'may',
+    creatorName: 'เมย์',
+    creatorAvatar: '👩🏻‍💻',
+    assignees: [
+      { id: 'kong', name: 'ก้อง', avatar: '👨🏻‍🎨', completed: false }
+    ],
+    status: 'todo',
+    createdAt: new Date(Date.now() - 3600000 * 12).toISOString()
+  }
+];
 
 export type FeedType = 'today' | 'announcement';
 
@@ -103,7 +210,7 @@ type Notice = { id:string; title:string; body:string };
 
 const nav = [
   { id: 'office', label: 'ออฟฟิศของเรา', icon: Home },
-  { id: 'feed', label: 'ฟีดงาน & ประกาศ', icon: ClipboardList },
+  { id: 'feed', label: 'ฟีด & มอบหมายงาน', icon: ClipboardList },
   { id: 'attendance', label: 'ลงเวลา & ลางาน', icon: CalendarCheck },
   { id: 'team', label: 'สมาชิกทีม', icon: Users },
   { id: 'admin', label: 'ผู้ดูแลระบบ', icon: Settings }
@@ -206,6 +313,17 @@ export default function App() {
   const [conferenceRoomId, setConferenceRoomId] = useState<RoomId | null>(null);
   const [isConferenceMinimized, setIsConferenceMinimized] = useState(false);
   const conferenceClientRef = useRef<VideoConferenceClient | null>(null);
+  const myRoomRef = useRef<RoomId>('hub');
+
+  const triggerUrgentFlash = useCallback((broadcast: UrgentBroadcast) => {
+    // CRITICAL FOCUS ZONE ISOLATION: Never show popup to anyone in Focus Zone
+    if (myRoomRef.current === 'focus') {
+      console.log('Skipping urgent flash popup: User is in Focus Zone');
+      return;
+    }
+    playAlertChime();
+    setUrgentPopup(broadcast);
+  }, []);
 
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
@@ -262,6 +380,37 @@ export default function App() {
   const [newPostTitle, setNewPostTitle] = useState('');
   const [newPostContent, setNewPostContent] = useState('');
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+
+  // Task Delegation State
+  const [tasks, setTasks] = useState<TaskItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('prime-tasks-v1');
+      return saved ? JSON.parse(saved) : defaultTasks;
+    } catch {
+      return defaultTasks;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('prime-tasks-v1', JSON.stringify(tasks));
+    } catch {}
+  }, [tasks]);
+
+  const [feedSubTab, setFeedSubTab] = useState<'feed' | 'tasks'>('feed');
+  const [taskFilter, setTaskFilter] = useState<'all' | 'assigned_to_me' | 'created_by_me' | 'pending' | 'completed'>('all');
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskTitleDraft, setTaskTitleDraft] = useState('');
+  const [taskDescDraft, setTaskDescDraft] = useState('');
+  const [taskDueDateDraft, setTaskDueDateDraft] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+  const [taskDueTimeDraft, setTaskDueTimeDraft] = useState('17:00');
+  const [taskPriorityDraft, setTaskPriorityDraft] = useState<TaskPriority>('normal');
+  const [taskAssigneesDraft, setTaskAssigneesDraft] = useState<string[]>([]);
+
+  // Flash Urgent Broadcast State
+  const [urgentPopup, setUrgentPopup] = useState<UrgentBroadcast | null>(null);
+  const [urgentModalOpen, setUrgentModalOpen] = useState(false);
+  const [urgentDraft, setUrgentDraft] = useState('');
 
   // Attendance & Leave State
   const todayDateStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -352,7 +501,8 @@ export default function App() {
       supabase.from('office_presence').select('*'),
       supabase.from('attendance_logs').select('*').order('created_at', { ascending: false }).limit(100),
       supabase.from('leave_requests').select('*').eq('status', 'approved').order('created_at', { ascending: false }).limit(100),
-      supabase.from('feed_posts').select('*').order('created_at', { ascending: false }).limit(60)
+      supabase.from('feed_posts').select('*').order('created_at', { ascending: false }).limit(60),
+      supabase.from('tasks').select('*').order('created_at', { ascending: false }).limit(100)
     ]);
 
     const failure = results[0].error || results[1].error || results[2].error || results[3].error;
@@ -406,6 +556,24 @@ export default function App() {
           noted: Array.isArray(r.reactions?.noted) ? r.reactions.noted : [],
         },
         comments: Array.isArray(r.comments) ? r.comments : []
+      })));
+    }
+
+    const taskRows = results[8]?.data;
+    if (taskRows && Array.isArray(taskRows)) {
+      setTasks(taskRows.map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description || '',
+        dueDate: r.due_date || '',
+        dueTime: r.due_time || '',
+        priority: r.priority || 'normal',
+        creatorId: r.creator_id || '',
+        creatorName: r.creator_name || 'สมาชิก',
+        creatorAvatar: r.creator_avatar || '',
+        assignees: Array.isArray(r.assignees) ? r.assignees : [],
+        status: r.status || 'todo',
+        createdAt: r.created_at
       })));
     }
 
@@ -468,6 +636,26 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => void sync())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => void sync())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'feed_posts' }, () => void sync())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => void sync())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'urgent_broadcasts' }, (payload) => {
+        void sync();
+        const r = payload.new as any;
+        if (r && myRoomRef.current !== 'focus') {
+          triggerUrgentFlash({
+            id: r.id,
+            message: r.message,
+            senderId: r.sender_id,
+            senderName: r.sender_name,
+            senderAvatar: r.sender_avatar,
+            createdAt: r.created_at
+          });
+        }
+      })
+      .on('broadcast', { event: 'urgent_flash' }, ({ payload }) => {
+        if (myRoomRef.current !== 'focus') {
+          triggerUrgentFlash(payload);
+        }
+      })
       .subscribe(status => { if (!cancelled) setConnected(status === 'SUBSCRIBED'); });
 
     const interval = setInterval(() => void heartbeat(), 30000);
@@ -540,6 +728,61 @@ export default function App() {
       return !hasReacted;
     }).length;
   }, [feedPosts, me.id]);
+
+  // Sync my room to ref and isolate Focus Zone from flash popups
+  useEffect(() => {
+    myRoomRef.current = me.room;
+    if (me.room === 'focus' && urgentPopup) {
+      setUrgentPopup(null);
+    }
+  }, [me.room, urgentPopup]);
+
+  // Demo multi-tab broadcast listener for urgent flash popups
+  useEffect(() => {
+    const onFlash = (e: Event) => {
+      const detail = (e as CustomEvent<UrgentBroadcast>).detail;
+      if (detail && myRoomRef.current !== 'focus') {
+        triggerUrgentFlash(detail);
+      }
+    };
+    window.addEventListener('prime-urgent-flash', onFlash);
+    return () => window.removeEventListener('prime-urgent-flash', onFlash);
+  }, [triggerUrgentFlash]);
+
+  // Pending tasks assigned to me that I haven't completed yet
+  const myPendingTasksCount = useMemo(() => {
+    return tasks.filter(t => {
+      if (t.status === 'done') return false;
+      const myAssignment = t.assignees.find(a => a.id === me.id);
+      return myAssignment && !myAssignment.completed;
+    }).length;
+  }, [tasks, me.id]);
+
+  const urgentDeadlinesCount = useMemo(() => {
+    return tasks.filter(t => {
+      if (t.status === 'done') return false;
+      const d = getDeadlineStatus(t.dueDate, t.dueTime, t.status);
+      return d.type === 'overdue' || d.type === 'today';
+    }).length;
+  }, [tasks]);
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(t => {
+      if (taskFilter === 'assigned_to_me') {
+        return t.assignees.some(a => a.id === me.id);
+      }
+      if (taskFilter === 'created_by_me') {
+        return t.creatorId === me.id;
+      }
+      if (taskFilter === 'pending') {
+        return t.status !== 'done';
+      }
+      if (taskFilter === 'completed') {
+        return t.status === 'done';
+      }
+      return true;
+    });
+  }, [tasks, taskFilter, me.id]);
 
   useEffect(() => { setNote(me.note || ''); }, [me.note, demo]);
 
@@ -1059,6 +1302,202 @@ export default function App() {
     }
   }
 
+  // Task Delegation Handlers
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = taskTitleDraft.trim();
+    if (!title) {
+      setError('กรุณาระบุหัวข้องาน');
+      return;
+    }
+    if (taskAssigneesDraft.length === 0) {
+      setError('กรุณาเลือกผู้รับผิดชอบงานอย่างน้อย 1 คน');
+      return;
+    }
+
+    const selectedAssignees: TaskAssignee[] = taskAssigneesDraft.map(id => {
+      const mem = members.find(m => m.id === id);
+      return {
+        id,
+        name: mem ? mem.name : (id === me.id ? me.name : 'สมาชิก'),
+        avatar: mem?.avatarUrl || (id === me.id ? me.avatarUrl : undefined),
+        completed: false
+      };
+    });
+
+    const newTaskObj: TaskItem = {
+      id: 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      title,
+      description: taskDescDraft.trim(),
+      dueDate: taskDueDateDraft,
+      dueTime: taskDueTimeDraft,
+      priority: taskPriorityDraft,
+      creatorId: me.id,
+      creatorName: me.name,
+      creatorAvatar: me.avatarUrl,
+      assignees: selectedAssignees,
+      status: 'todo',
+      createdAt: new Date().toISOString()
+    };
+
+    if (demo || !supabase || !session) {
+      setTasks(prev => [newTaskObj, ...prev]);
+      setTaskTitleDraft('');
+      setTaskDescDraft('');
+      setTaskAssigneesDraft([]);
+      setTaskModalOpen(false);
+      notify(`มอบหมายงาน "${title}" เรียบร้อย (กำหนดส่ง: ${taskDueDateDraft || 'ไม่มีกำหนด'} ${taskDueTimeDraft || ''}) 📋`);
+      return;
+    }
+
+    await action(async () => {
+      const { error: rpcErr } = await supabase!.rpc('create_task', {
+        p_title: title,
+        p_description: taskDescDraft.trim(),
+        p_due_date: taskDueDateDraft || null,
+        p_due_time: taskDueTimeDraft || '',
+        p_priority: taskPriorityDraft,
+        p_assignees: selectedAssignees
+      });
+      if (rpcErr) throw rpcErr;
+      setTaskTitleDraft('');
+      setTaskDescDraft('');
+      setTaskAssigneesDraft([]);
+      setTaskModalOpen(false);
+      await refresh();
+      notify(`มอบหมายงาน "${title}" เรียบร้อย (กำหนดส่ง: ${taskDueDateDraft || 'ไม่มีกำหนด'} ${taskDueTimeDraft || ''}) 📋`);
+    });
+  };
+
+  const handleToggleAssigneeDone = async (taskId: string) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      const isAssignee = t.assignees.some(a => a.id === me.id);
+      let updatedAssignees = [...t.assignees];
+      if (isAssignee) {
+        updatedAssignees = updatedAssignees.map(a => {
+          if (a.id === me.id) {
+            const nextCompleted = !a.completed;
+            return {
+              ...a,
+              completed: nextCompleted,
+              completedAt: nextCompleted ? new Date().toISOString() : undefined
+            };
+          }
+          return a;
+        });
+      }
+      
+      let nextStatus: TaskStatus = t.status;
+      const allDone = updatedAssignees.length > 0 && updatedAssignees.every(a => a.completed);
+      const anyDone = updatedAssignees.some(a => a.completed);
+      if (!isAssignee && t.creatorId === me.id) {
+        nextStatus = t.status === 'done' ? 'todo' : 'done';
+      } else if (allDone) {
+        nextStatus = 'done';
+      } else if (anyDone) {
+        nextStatus = 'in_progress';
+      } else {
+        nextStatus = 'todo';
+      }
+
+      return {
+        ...t,
+        assignees: updatedAssignees,
+        status: nextStatus
+      };
+    }));
+
+    if (!demo && supabase && session) {
+      try {
+        const { error: rpcErr } = await supabase.rpc('toggle_task_assignee_done', { p_task_id: taskId });
+        if (rpcErr) console.warn('toggle_task_assignee_done err:', rpcErr);
+        await refresh();
+      } catch (err) {
+        console.warn('Failed to sync toggle_task_assignee_done:', err);
+      }
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm('คุณต้องการลบงานที่มอบหมายนี้ใช่หรือไม่?')) return;
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    if (!demo && supabase && session) {
+      try {
+        const { error: rpcErr } = await supabase.rpc('delete_task', { p_task_id: taskId });
+        if (rpcErr) console.warn('delete_task err:', rpcErr);
+        await refresh();
+      } catch (err) {
+        console.warn('Failed to delete task:', err);
+      }
+    }
+    notify('ลบงานที่มอบหมายเรียบร้อย');
+  };
+
+  const handleSendUrgentBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const msg = urgentDraft.trim();
+    if (!msg) {
+      setError('กรุณาใส่ข้อความประกาศด่วน');
+      return;
+    }
+    if (msg.length > 280) {
+      setError('ข้อความประกาศด่วนต้องไม่เกิน 280 ตัวอักษร');
+      return;
+    }
+
+    const broadcastObj: UrgentBroadcast = {
+      id: 'ub-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      message: msg,
+      senderId: me.id,
+      senderName: me.name,
+      senderAvatar: me.avatarUrl,
+      createdAt: new Date().toISOString()
+    };
+
+    setUrgentModalOpen(false);
+    setUrgentDraft('');
+
+    if (demo || !supabase || !session) {
+      if (myRoomRef.current !== 'focus') {
+        playAlertChime();
+        setUrgentPopup(broadcastObj);
+      } else {
+        notify('คุณอยู่ในห้อง Focus Zone ระบบจึงไม่แสดง Pop-up เพื่อรักษาสมาธิ 🤫');
+      }
+      try {
+        localStorage.setItem('prime-urgent-flash-last', JSON.stringify(broadcastObj));
+        window.dispatchEvent(new CustomEvent('prime-urgent-flash', { detail: broadcastObj }));
+      } catch {}
+      notify('ส่งประกาศด่วนเรียบร้อย Pop-up แจ้งทุกคนกลางหน้าจอแล้ว ⚡');
+      return;
+    }
+
+    await action(async () => {
+      const { error: rpcErr } = await supabase!.rpc('send_urgent_broadcast', {
+        p_message: msg
+      });
+      if (rpcErr) throw rpcErr;
+
+      try {
+        const channel = supabase!.channel('prime-office-updates');
+        await channel.send({
+          type: 'broadcast',
+          event: 'urgent_flash',
+          payload: broadcastObj
+        });
+      } catch (err) {
+        console.warn('Realtime broadcast send error:', err);
+      }
+
+      if (myRoomRef.current !== 'focus') {
+        playAlertChime();
+        setUrgentPopup(broadcastObj);
+      }
+      notify('ส่งประกาศด่วนเรียบร้อย Pop-up แจ้งทุกคนกลางหน้าจอแล้ว ⚡');
+    });
+  };
+
   // Attendance Handlers (Work hours: 08:00 - 17:00)
   async function handleCheckIn() {
     await action(async () => {
@@ -1503,6 +1942,15 @@ export default function App() {
 
         <div className="island-actions">
           <button 
+            type="button"
+            className="urgent-flash-top-btn" 
+            onClick={() => { setUrgentDraft(''); setUrgentModalOpen(true); }}
+            title="ส่งประกาศด่วนถึงทุกคน (Pop-up กลางหน้าจอทันที ยกเว้นห้อง Focus Zone)"
+          >
+            <Zap size={14} className="flash-zap-pulse" />
+            <span>ประกาศด่วน</span>
+          </button>
+          <button 
             className="icon-button bell" 
             onClick={() => setNoticeOpen(true)} 
             title={me.room === 'focus' ? 'ห้อง Focus Zone: ปิดแจ้งเตือน (โหมดห้ามรบกวน)' : `การแจ้งเตือน ${incoming.length} รายการ`}
@@ -1638,11 +2086,15 @@ export default function App() {
         <button 
           className={`dock-btn ${page === 'feed' || page === 'today' || page === 'announcements' ? 'active' : ''}`} 
           onClick={() => { setPage('feed'); setSelectedRoomCard(null); }} 
-          title="ฟีดงาน & บอร์ดประกาศของทีม"
+          title="ฟีด & มอบหมายงานของทีม"
         >
           <ClipboardList size={19} />
           <span className="dock-btn-label">ฟีด & งาน</span>
-          {unreadFeedCount > 0 && <span className="dock-badge">{unreadFeedCount}</span>}
+          {(unreadFeedCount + myPendingTasksCount) > 0 && (
+            <span className="dock-badge">
+              {unreadFeedCount + myPendingTasksCount}
+            </span>
+          )}
         </button>
 
         {me.isAdmin && (
@@ -2096,10 +2548,24 @@ export default function App() {
               <div className="feed-filter-tabs">
                 <button 
                   type="button" 
-                  className={`feed-tab-btn ${feedFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setFeedFilter('all')}
+                  className={`feed-tab-btn ${feedSubTab === 'tasks' ? 'active' : ''}`}
+                  onClick={() => setFeedSubTab('tasks')}
                 >
-                  <span>ทั้งหมด</span>
+                  <CheckSquare size={13} style={{ marginRight: '4px' }} />
+                  <span>📋 มอบหมายงาน</span>
+                  <span style={{ opacity: 0.85 }}>({tasks.length})</span>
+                  {myPendingTasksCount > 0 && (
+                    <span style={{ background: '#2563eb', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>
+                      {myPendingTasksCount} งานของคุณ
+                    </span>
+                  )}
+                </button>
+                <button 
+                  type="button" 
+                  className={`feed-tab-btn ${feedSubTab === 'feed' && feedFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => { setFeedSubTab('feed'); setFeedFilter('all'); }}
+                >
+                  <span>ฟีดทั้งหมด</span>
                   <span style={{ opacity: 0.8 }}>({feedPosts.length})</span>
                   {unreadFeedCount > 0 && (
                     <span style={{ background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>
@@ -2109,25 +2575,215 @@ export default function App() {
                 </button>
                 <button 
                   type="button" 
-                  className={`feed-tab-btn ${feedFilter === 'today' ? 'active' : ''}`}
-                  onClick={() => setFeedFilter('today')}
+                  className={`feed-tab-btn ${feedSubTab === 'feed' && feedFilter === 'today' ? 'active' : ''}`}
+                  onClick={() => { setFeedSubTab('feed'); setFeedFilter('today'); }}
                 >
                   <span>💼 งานวันนี้</span>
                   <span style={{ opacity: 0.8 }}>({feedPosts.filter(p => p.type === 'today').length})</span>
                 </button>
                 <button 
                   type="button" 
-                  className={`feed-tab-btn ${feedFilter === 'announcement' ? 'active' : ''}`}
-                  onClick={() => setFeedFilter('announcement')}
+                  className={`feed-tab-btn ${feedSubTab === 'feed' && feedFilter === 'announcement' ? 'active' : ''}`}
+                  onClick={() => { setFeedSubTab('feed'); setFeedFilter('announcement'); }}
                 >
                   <span>📢 เรื่องประกาศ</span>
                   <span style={{ opacity: 0.8 }}>({feedPosts.filter(p => p.type === 'announcement').length})</span>
                 </button>
               </div>
 
-              {/* 2. Composer Card (Open to all members) */}
-              <div className="feed-composer-card">
-                <form onSubmit={handleCreatePost}>
+              {feedSubTab === 'tasks' ? (
+                <div className="task-system-wrapper">
+                  {/* KPI Summary Cards */}
+                  <div className="task-summary-row">
+                    <div className="task-kpi-card">
+                      <div className="task-kpi-icon blue"><ClipboardList size={18} /></div>
+                      <div className="task-kpi-text">
+                        <small>งานทั้งหมด</small>
+                        <strong>{tasks.length}</strong>
+                      </div>
+                    </div>
+                    <div className="task-kpi-card">
+                      <div className="task-kpi-icon amber"><Clock size={18} /></div>
+                      <div className="task-kpi-text">
+                        <small>รอดำเนินการ</small>
+                        <strong>{tasks.filter(t => t.status !== 'done').length}</strong>
+                      </div>
+                    </div>
+                    <div className="task-kpi-card">
+                      <div className="task-kpi-icon red"><AlertTriangle size={18} /></div>
+                      <div className="task-kpi-text">
+                        <small>ส่งวันนี้/เกินกำหนด</small>
+                        <strong>{urgentDeadlinesCount}</strong>
+                      </div>
+                    </div>
+                    <div className="task-kpi-card">
+                      <div className="task-kpi-icon green"><CheckCircle2 size={18} /></div>
+                      <div className="task-kpi-text">
+                        <small>เสร็จสมบูรณ์</small>
+                        <strong>{tasks.filter(t => t.status === 'done').length}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Task Action Bar: Filters + Assign Task Button */}
+                  <div className="task-action-bar">
+                    <div className="task-filter-chips">
+                      {[
+                        { id: 'all', label: 'ทั้งหมด' },
+                        { id: 'assigned_to_me', label: `งานที่มอบให้ฉัน (${tasks.filter(t => t.assignees.some(a => a.id === me.id)).length})` },
+                        { id: 'created_by_me', label: 'งานที่ฉันมอบหมาย' },
+                        { id: 'pending', label: 'ยังไม่เสร็จ' },
+                        { id: 'completed', label: 'เสร็จแล้ว' }
+                      ].map(filter => (
+                        <button
+                          type="button"
+                          key={filter.id}
+                          className={`task-filter-btn ${taskFilter === filter.id ? 'active' : ''}`}
+                          onClick={() => setTaskFilter(filter.id as any)}
+                        >
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="primary create-task-trigger-btn"
+                      onClick={() => {
+                        setTaskTitleDraft('');
+                        setTaskDescDraft('');
+                        setTaskDueDateDraft(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+                        setTaskDueTimeDraft('17:00');
+                        setTaskPriorityDraft('normal');
+                        setTaskAssigneesDraft([me.id]);
+                        setTaskModalOpen(true);
+                      }}
+                    >
+                      <Plus size={15} /> มอบหมายงานใหม่
+                    </button>
+                  </div>
+
+                  {/* Task Cards List */}
+                  <div className="task-cards-list">
+                    {filteredTasks.length === 0 ? (
+                      <div className="task-empty-state">
+                        <div className="empty-icon-circle">📋</div>
+                        <h3>ไม่มีรายการงานในหมวดหมู่นี้</h3>
+                        <p>คุณสามารถคลิก "มอบหมายงานใหม่" ด้านบนเพื่อเริ่มมอบหมายงานให้เพื่อนร่วมทีมหรือตัวเองได้ทันที</p>
+                      </div>
+                    ) : (
+                      filteredTasks.map(task => {
+                        const deadline = getDeadlineStatus(task.dueDate, task.dueTime, task.status);
+                        const isCreator = task.creatorId === me.id;
+                        const completedAssigneesCount = task.assignees.filter(a => a.completed).length;
+
+                        return (
+                          <article className={`task-card-item ${task.status} ${task.priority}`} key={task.id}>
+                            <div className="task-card-header">
+                              <div className="task-header-tags">
+                                <span className={`task-priority-tag ${task.priority}`}>
+                                  {task.priority === 'urgent' ? '⚡ ด่วนมาก' : task.priority === 'normal' ? '📌 ปกติ' : '☕ ไม่ด่วน'}
+                                </span>
+                                <span className={`task-deadline-tag ${deadline.type}`}>
+                                  <Clock size={12} />
+                                  <span>{deadline.text}</span>
+                                </span>
+                                <span className={`task-status-tag ${task.status}`}>
+                                  {task.status === 'done' ? '✅ เสร็จสิ้น' : task.status === 'in_progress' ? '⏳ กำลังทำ' : '📋 รอเริ่มงาน'}
+                                </span>
+                              </div>
+
+                              <div className="task-header-actions">
+                                {(isCreator || me.isAdmin) && (
+                                  <button
+                                    type="button"
+                                    className="task-delete-icon-btn"
+                                    onClick={() => handleDeleteTask(task.id)}
+                                    title="ลบงานที่มอบหมายนี้"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="task-card-body">
+                              <h3>{task.title}</h3>
+                              {task.description && <p>{task.description}</p>}
+                            </div>
+
+                            <div className="task-card-creator">
+                              <span className="creator-label">ผู้มอบหมาย:</span>
+                              <span className="creator-badge">
+                                {task.creatorAvatar ? <span className="creator-av-icon">{task.creatorAvatar}</span> : '👤'}
+                                <strong>{task.creatorName}</strong>
+                              </span>
+                              <small className="creator-time">· {formatPostTime(task.createdAt)}</small>
+                            </div>
+
+                            {/* Multi-Assignee Progress & Interactive Checklist */}
+                            <div className="task-assignees-container">
+                              <div className="task-assignees-heading">
+                                <span>ผู้รับผิดชอบงาน ({completedAssigneesCount}/{task.assignees.length} คนส่งงานแล้ว):</span>
+                                {task.assignees.length > 0 && (
+                                  <div className="assignee-progress-bar">
+                                    <div 
+                                      className="assignee-progress-fill" 
+                                      style={{ width: `${(completedAssigneesCount / task.assignees.length) * 100}%` }} 
+                                    />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="task-assignees-pills-grid">
+                                {task.assignees.map(a => {
+                                  const isMe = a.id === me.id;
+                                  return (
+                                    <div className={`assignee-pill-row ${a.completed ? 'completed' : 'pending'}`} key={a.id}>
+                                      <div className="assignee-pill-left">
+                                        {a.avatar ? <span className="assignee-pill-avatar">{a.avatar}</span> : <span className="assignee-pill-avatar">👤</span>}
+                                        <span className="assignee-pill-name">{a.name}{isMe ? ' (คุณ)' : ''}</span>
+                                      </div>
+                                      {isMe ? (
+                                        <button
+                                          type="button"
+                                          className={`assignee-toggle-check-btn ${a.completed ? 'is-done' : 'is-todo'}`}
+                                          onClick={() => handleToggleAssigneeDone(task.id)}
+                                          title={a.completed ? "คุณส่งงานแล้ว (คลิกเพื่อยกเลิก)" : "คลิกเพื่อส่งมอบงานของคุณ"}
+                                        >
+                                          {a.completed ? (
+                                            <>
+                                              <CheckCircle2 size={13} color="#059669" />
+                                              <span>ส่งงานแล้ว ✓</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Square size={13} color="#64748b" />
+                                              <span>คลิกส่งงาน</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      ) : (
+                                        <span className={`assignee-static-badge ${a.completed ? 'done' : 'todo'}`}>
+                                          {a.completed ? '✓ ส่งแล้ว' : '⏳ รอส่งงาน'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* 2. Composer Card (Open to all members) */}
+                  <div className="feed-composer-card">
+                    <form onSubmit={handleCreatePost}>
                   <div className="feed-composer-header">
                     <div className="feed-author-meta">
                       <Avatar member={me} small />
@@ -2366,13 +3022,15 @@ export default function App() {
                     );
                   })}
 
-                {feedPosts.filter(p => feedFilter === 'all' || p.type === feedFilter).length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8', background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                    <ClipboardList size={36} style={{ margin: '0 auto 10px', opacity: 0.5 }} />
-                    <p style={{ margin: 0, fontSize: '13px' }}>ยังไม่มีรายการในหมวดนี้ โพสต์เป็นคนแรกได้เลย!</p>
+                    {feedPosts.filter(p => feedFilter === 'all' || p.type === feedFilter).length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8', background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                        <ClipboardList size={36} style={{ margin: '0 auto 10px', opacity: 0.5 }} />
+                        <p style={{ margin: 0, fontSize: '13px' }}>ยังไม่มีรายการในหมวดนี้ โพสต์เป็นคนแรกได้เลย!</p>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </div>
           )}
 
@@ -2575,6 +3233,271 @@ export default function App() {
               </div>
             </form>
           </section>
+        </div>
+      )}
+
+      {/* FLASH URGENT BROADCAST COMPOSER MODAL */}
+      {urgentModalOpen && (
+        <div className="modal-backdrop" onClick={() => setUrgentModalOpen(false)}>
+          <section className="modal flash-broadcast-modal" onClick={e => e.stopPropagation()}>
+            <button className="icon-button close-modal" onClick={() => setUrgentModalOpen(false)}><X size={18} /></button>
+            <div className="flash-modal-badge-icon">
+              <Zap size={26} color="#d97706" />
+            </div>
+            <h2>⚡ ประกาศด่วนพิเศษ (Flash Broadcast)</h2>
+            <p>ส่งข้อความสั้นๆ ขึ้น Pop-up กลางหน้าจอทุกคนแบบ Real-time ทันที</p>
+
+            <div className="focus-zone-isolation-banner">
+              <span>🤫 ข้อความนี้จะไม่ขึ้นรบกวนสมาชิกในห้อง <strong>Focus Zone</strong> เพื่อรักษาสมาธิการทำงาน</span>
+            </div>
+
+            <form onSubmit={handleSendUrgentBroadcast}>
+              <div style={{ textAlign: 'left', marginBottom: '8px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '6px' }}>เลือกข้อความด่วนสำเร็จรูป:</label>
+                <div className="flash-presets-grid">
+                  {[
+                    '🚨 รวมพลประชุมด่วน ทุกคนเข้าห้อง Boardroom ตอนนี้ครับ',
+                    '⚠️ แจ้งด่วน: กำลังตรวจสอบปัญหาระบบ รบกวนรอการอัปเดตสักครู่',
+                    '🎯 แจ้งด่วน: ลูกค้าขอไฟล์งานด่วน ขอส่งต่อให้ทีมช่วยดูด้วยครับ',
+                    '☕ พักเบรก: เชิญทุกคนมาจิบกาแฟและเบรกพร้อมกันที่ Coffee Bar ครับ'
+                  ].map(preset => (
+                    <button
+                      type="button"
+                      key={preset}
+                      className="flash-preset-chip"
+                      onClick={() => setUrgentDraft(preset)}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'left', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>พิมพ์ข้อความประกาศด่วนของคุณ:</label>
+                  <span style={{ fontSize: '11px', color: urgentDraft.length > 250 ? '#ef4444' : '#94a3b8' }}>{urgentDraft.length} / 280 ตัวอักษร</span>
+                </div>
+                <textarea
+                  required
+                  rows={3}
+                  maxLength={280}
+                  placeholder="พิมพ์ข้อความด่วนสั้นๆ ที่ต้องการให้ทุกคนทราบทันที..."
+                  value={urgentDraft}
+                  onChange={e => setUrgentDraft(e.target.value)}
+                  style={{ width: '100%', fontSize: '14px', borderRadius: '10px', padding: '10px 12px' }}
+                />
+              </div>
+
+              <div className="button-row">
+                <button type="button" className="secondary" onClick={() => setUrgentModalOpen(false)}>ยกเลิก</button>
+                <button type="submit" className="primary flash-submit-btn" disabled={busy || !urgentDraft.trim()}>
+                  <Zap size={14} /> ส่งประกาศด่วนทันที
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {/* TASK DELEGATION COMPOSER MODAL */}
+      {taskModalOpen && (
+        <div className="modal-backdrop" onClick={() => setTaskModalOpen(false)}>
+          <section className="modal task-composer-modal" onClick={e => e.stopPropagation()}>
+            <button className="icon-button close-modal" onClick={() => setTaskModalOpen(false)}><X size={18} /></button>
+            <div className="task-modal-badge-icon">
+              <ClipboardList size={26} color="#2563eb" />
+            </div>
+            <h2>📋 มอบหมายงานใหม่ (Task Delegation)</h2>
+            <p>ใครสามารถมอบหมายงานให้ใครก็ได้ กำหนดวันส่ง และมอบหมายให้หลายคนพร้อมกันได้</p>
+
+            <form onSubmit={handleCreateTask}>
+              {/* Title */}
+              <div style={{ textAlign: 'left', marginBottom: '12px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '5px' }}>
+                  หัวข้องาน *
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={180}
+                  placeholder="เช่น จัดทำสรุปยอดขาย Q3, ตรวจสอบความปลอดภัยระบบ WebRTC..."
+                  value={taskTitleDraft}
+                  onChange={e => setTaskTitleDraft(e.target.value)}
+                  style={{ width: '100%', fontSize: '13px', borderRadius: '9px', padding: '10px 12px' }}
+                />
+              </div>
+
+              {/* Description */}
+              <div style={{ textAlign: 'left', marginBottom: '14px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '5px' }}>
+                  รายละเอียดงาน / สิ่งที่ต้องส่ง
+                </label>
+                <textarea
+                  rows={2}
+                  maxLength={600}
+                  placeholder="ระบุรายละเอียด แนวทาง หรือข้อมูลที่ต้องการให้ทีมดำเนินการ..."
+                  value={taskDescDraft}
+                  onChange={e => setTaskDescDraft(e.target.value)}
+                  style={{ width: '100%', fontSize: '13px', borderRadius: '9px', padding: '9px 12px', minHeight: '65px' }}
+                />
+              </div>
+
+              {/* Due Date & Due Time & Priority in 1 Grid */}
+              <div className="task-deadline-form-grid">
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                    กำหนดส่งวันที่ *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={taskDueDateDraft}
+                    onChange={e => setTaskDueDateDraft(e.target.value)}
+                    style={{ width: '100%', fontSize: '12px', padding: '8px 10px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                    เวลาส่ง (ชั่วโมง:นาที)
+                  </label>
+                  <input
+                    type="time"
+                    value={taskDueTimeDraft}
+                    onChange={e => setTaskDueTimeDraft(e.target.value)}
+                    style={{ width: '100%', fontSize: '12px', padding: '8px 10px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                    ระดับความสำคัญ
+                  </label>
+                  <select
+                    value={taskPriorityDraft}
+                    onChange={e => setTaskPriorityDraft(e.target.value as TaskPriority)}
+                    style={{ width: '100%', fontSize: '12px', padding: '8px 10px' }}
+                  >
+                    <option value="urgent">⚡ ด่วนมาก (Urgent)</option>
+                    <option value="normal">📌 ปกติ (Normal)</option>
+                    <option value="low">☕ ไม่ด่วน (Low)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Multi-assignee selection */}
+              <div style={{ textAlign: 'left', margin: '14px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                    มอบหมายให้ใครบ้าง (เลือกได้หลายคนพร้อมกัน):
+                  </label>
+                  <button
+                    type="button"
+                    className="select-all-assignees-btn"
+                    onClick={() => {
+                      if (taskAssigneesDraft.length === members.length) {
+                        setTaskAssigneesDraft([]);
+                      } else {
+                        setTaskAssigneesDraft(members.map(m => m.id));
+                      }
+                    }}
+                  >
+                    {taskAssigneesDraft.length === members.length ? 'ยกเลิกทั้งหมด' : '✓ มอบให้ทุกคน'}
+                  </button>
+                </div>
+
+                <div className="task-member-select-grid">
+                  {members.map(m => {
+                    const isSelected = taskAssigneesDraft.includes(m.id);
+                    return (
+                      <button
+                        type="button"
+                        key={m.id}
+                        className={`member-select-pill ${isSelected ? 'selected' : ''}`}
+                        onClick={() => {
+                          if (isSelected) {
+                            setTaskAssigneesDraft(taskAssigneesDraft.filter(id => id !== m.id));
+                          } else {
+                            setTaskAssigneesDraft([...taskAssigneesDraft, m.id]);
+                          }
+                        }}
+                      >
+                        <Avatar member={m} small />
+                        <div className="member-pill-text">
+                          <strong>{m.name}{m.id === me.id ? ' (คุณ)' : ''}</strong>
+                          <small>{m.role}</small>
+                        </div>
+                        {isSelected && <span className="pill-check-icon">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <small style={{ color: '#64748b', fontSize: '11px', display: 'block', marginTop: '6px' }}>
+                  เลือกแล้ว {taskAssigneesDraft.length} คน (สามารถมอบหมายงานพร้อมกันหลายคนได้)
+                </small>
+              </div>
+
+              <div className="button-row" style={{ marginTop: '20px' }}>
+                <button type="button" className="secondary" onClick={() => setTaskModalOpen(false)}>ยกเลิก</button>
+                <button type="submit" className="primary" disabled={busy || taskAssigneesDraft.length === 0}>
+                  <CheckSquare size={15} /> มอบหมายงานทันที
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {/* SCREEN CENTER FLASH URGENT BROADCAST POPUP (Excluded from Focus Zone) */}
+      {urgentPopup && me.room !== 'focus' && (
+        <div className="urgent-popup-backdrop" onClick={() => setUrgentPopup(null)}>
+          <div className="urgent-flash-popup-card" onClick={e => e.stopPropagation()}>
+            <div className="flash-popup-glow-border" />
+            <div className="flash-popup-header">
+              <div className="flash-alert-badge">
+                <Zap size={16} className="flash-zap-pulse" />
+                <span>⚡ ประกาศด่วนพิเศษ · FLASH ANNOUNCEMENT</span>
+              </div>
+              <button 
+                className="flash-popup-close-btn" 
+                onClick={() => setUrgentPopup(null)}
+                title="ปิดข้อความ"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flash-sender-profile">
+              {urgentPopup.senderAvatar ? (
+                <span className="flash-sender-avatar">{urgentPopup.senderAvatar}</span>
+              ) : (
+                <span className="flash-sender-avatar">📢</span>
+              )}
+              <div className="flash-sender-meta">
+                <strong>{urgentPopup.senderName}</strong>
+                <small>{formatPostTime(urgentPopup.createdAt)}</small>
+              </div>
+            </div>
+
+            <div className="flash-message-content">
+              <p>{urgentPopup.message}</p>
+            </div>
+
+            <div className="flash-popup-footer">
+              <small className="focus-protection-hint">
+                🤫 ป็อปอัปนี้แจ้งเตือนทุกคนทันที (ยกเว้นผู้ที่อยู่ในห้อง Focus Zone เพื่อรักษาความเงียบ)
+              </small>
+              <button 
+                type="button" 
+                className="flash-acknowledge-btn"
+                onClick={() => {
+                  playChime('stop');
+                  setUrgentPopup(null);
+                }}
+              >
+                <Check size={16} /> รับทราบข้อความ
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

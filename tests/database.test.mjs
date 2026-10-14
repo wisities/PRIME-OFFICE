@@ -52,5 +52,38 @@ test('database permissions and office workflows',async(t)=>{
     await db.query('select public.delete_feed_post($1)',[pId]);
     assert.equal((await db.query('select * from public.feed_posts where id=$1',[pId])).rows.length,0);
   });
+  await t.test('task delegation to multiple members and urgent flash broadcast',async()=>{
+    await asUser(member);
+    const assignees = JSON.stringify([
+      { id: member, name: 'Member', completed: false },
+      { id: admin, name: 'Admin', completed: false }
+    ]);
+    const taskId = (await db.query("select public.create_task('เตรียมสไลด์นำเสนอ','งานด่วนก่อนเที่ยง','2026-10-20'::date,'12:00','urgent',$1::jsonb) as id",[assignees])).rows[0].id;
+    assert.ok(taskId);
+
+    let task = (await db.query('select * from public.tasks where id=$1',[taskId])).rows[0];
+    assert.equal(task.title,'เตรียมสไลด์นำเสนอ');
+    assert.equal(task.priority,'urgent');
+    assert.equal(task.due_time,'12:00');
+    assert.equal(task.assignees.length,2);
+
+    // Toggle assignee done
+    await db.query('select public.toggle_task_assignee_done($1)',[taskId]);
+    task = (await db.query('select * from public.tasks where id=$1',[taskId])).rows[0];
+    assert.equal(task.assignees[0].completed,true);
+    assert.equal(task.status,'in_progress');
+
+    // Admin toggles done
+    await asUser(admin);
+    await db.query('select public.toggle_task_assignee_done($1)',[taskId]);
+    task = (await db.query('select * from public.tasks where id=$1',[taskId])).rows[0];
+    assert.equal(task.status,'done');
+
+    // Urgent broadcast
+    const bId = (await db.query("select public.send_urgent_broadcast('ประชุมด่วน 5 นาทีครับ!') as id")).rows[0].id;
+    assert.ok(bId);
+    const broadcast = (await db.query('select * from public.urgent_broadcasts where id=$1',[bId])).rows[0];
+    assert.equal(broadcast.message,'ประชุมด่วน 5 นาทีครับ!');
+  });
   await db.close();
 });

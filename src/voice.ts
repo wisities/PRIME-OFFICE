@@ -105,6 +105,33 @@ export function playChime(type: 'start' | 'stop' | 'join' | 'leave') {
   }
 }
 
+// Play distinctive urgent flash broadcast alert chime
+export function playAlertChime() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(587.33, now); // D5
+    osc.frequency.setValueAtTime(880, now + 0.12); // A5
+    osc.frequency.setValueAtTime(1174.66, now + 0.24); // D6
+    gain.gain.setValueAtTime(0.28, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    osc.start(now);
+    osc.stop(now + 0.55);
+  } catch (err) {
+    console.warn('Audio alert chime error:', err);
+  }
+}
+
 export class VoiceHuddleClient {
   private myId: string;
   private myName: string;
