@@ -7,7 +7,7 @@ import {
   Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles,
   Maximize2, Minimize2, Camera, Heart, ThumbsUp, CheckSquare, MessageSquare, Send,
   Zap, AlertTriangle, Calendar, UserCheck, Square, MessageCircle, Lock, Search, ArrowLeft,
-  Image as ImageIcon, Download
+  Image as ImageIcon, Download, Mail
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import {
@@ -350,6 +350,9 @@ export default function App() {
   const [speakingMembers, setSpeakingMembers] = useState<Set<string>>(new Set());
   const [activeVoicePeers, setActiveVoicePeers] = useState<string[]>([]);
   const [micLevel, setMicLevel] = useState(0);
+  const [micMode, setMicMode] = useState<'open' | 'ptt'>(() => {
+    return (localStorage.getItem('prime_mic_mode') as 'open' | 'ptt') || 'open';
+  });
   const voiceClientRef = useRef<VoiceHuddleClient | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
 
@@ -451,6 +454,8 @@ export default function App() {
   const [taskDueTimeDraft, setTaskDueTimeDraft] = useState('17:00');
   const [taskPriorityDraft, setTaskPriorityDraft] = useState<TaskPriority>('normal');
   const [taskAssigneesDraft, setTaskAssigneesDraft] = useState<string[]>([]);
+  const [syncCalendarOnCreate, setSyncCalendarOnCreate] = useState(true);
+  const [sendEmailOnCreate, setSendEmailOnCreate] = useState(true);
 
   // Flash Urgent Broadcast State
   const [urgentPopup, setUrgentPopup] = useState<UrgentBroadcast | null>(null);
@@ -1122,48 +1127,70 @@ export default function App() {
     });
   }, []);
 
+  const handleSetMicMode = useCallback((mode: 'open' | 'ptt') => {
+    setMicMode(mode);
+    localStorage.setItem('prime_mic_mode', mode);
+    if (mode === 'ptt') {
+      setIsMuted(true);
+      if (voiceClientRef.current) {
+        voiceClientRef.current.setMute(true);
+      }
+      notify('📻 โหมด Push-to-Talk: กด Spacebar หรือกดปุ่มค้างเพื่อพูด');
+    } else {
+      notify('🎙️ โหมด Open Mic: คลิกเปิด/ปิดไมค์ พูดคุยต่อเนื่องได้');
+    }
+  }, []);
+
   const holdStartTimeRef = useRef(0);
   const wasHoldTalkRef = useRef(false);
 
   const handleMicPointerDown = useCallback(() => {
+    if (micMode !== 'ptt') return;
     holdStartTimeRef.current = Date.now();
     wasHoldTalkRef.current = false;
     startHoldTalk();
-  }, [startHoldTalk]);
+  }, [micMode, startHoldTalk]);
 
   const handleMicPointerUp = useCallback(() => {
+    if (micMode !== 'ptt') return;
     const elapsed = Date.now() - holdStartTimeRef.current;
-    if (elapsed >= 350) {
+    if (elapsed >= 300) {
       wasHoldTalkRef.current = true;
       stopHoldTalk();
     } else {
       wasHoldTalkRef.current = false;
     }
     holdStartTimeRef.current = 0;
-  }, [stopHoldTalk]);
+  }, [micMode, stopHoldTalk]);
 
   const handleMicPointerLeave = useCallback(() => {
+    if (micMode !== 'ptt') return;
     if (holdStartTimeRef.current > 0) {
       const elapsed = Date.now() - holdStartTimeRef.current;
-      if (elapsed >= 350) {
+      if (elapsed >= 300) {
         wasHoldTalkRef.current = true;
         stopHoldTalk();
       }
       holdStartTimeRef.current = 0;
     }
-  }, [stopHoldTalk]);
+  }, [micMode, stopHoldTalk]);
 
   const handleMicClick = useCallback(() => {
-    if (wasHoldTalkRef.current) {
-      wasHoldTalkRef.current = false;
+    if (micMode === 'ptt') {
+      if (wasHoldTalkRef.current) {
+        wasHoldTalkRef.current = false;
+        return;
+      }
+      notify('โหมด Push-to-Talk: กด Spacebar หรือกดปุ่มไมค์ค้างไว้เพื่อพูด 📻');
       return;
     }
+    // Open Mic mode: toggle freely between continuous mic and muted
     toggleMute();
-  }, [toggleMute]);
+  }, [micMode, toggleMute]);
 
-  // Spacebar Push-to-Talk (Hold Spacebar to speak)
+  // Spacebar Push-to-Talk (ACTIVE ONLY IN 'ptt' MODE)
   useEffect(() => {
-    if (!inHuddle) return;
+    if (!inHuddle || micMode !== 'ptt') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         const target = e.target as HTMLElement;
@@ -1188,7 +1215,7 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [inHuddle, startHoldTalk, stopHoldTalk]);
+  }, [inHuddle, micMode, startHoldTalk, stopHoldTalk]);
 
   // ESC key to close any drawer or popover
   useEffect(() => {
@@ -1513,6 +1540,66 @@ export default function App() {
     }
   }
 
+  // Google Calendar Integration
+  const getGoogleCalendarUrl = (task: { title: string; description?: string; dueDate?: string; dueTime?: string }) => {
+    const title = encodeURIComponent(`[PRIME] ${task.title}`);
+    const details = encodeURIComponent(`${task.description || ''}\n\nระบบจัดการงาน PRIME Virtual Office`);
+    const dueTime = task.dueTime || '18:00';
+    const dueDate = task.dueDate || new Date().toISOString().slice(0, 10);
+    const datePart = dueDate.replace(/-/g, '');
+    const timePart = dueTime.replace(':', '') + '00';
+    const dt = `${datePart}T${timePart}`;
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&dates=${dt}/${dt}`;
+  };
+
+  // iCalendar (.ics) File Downloader for Apple/Outlook/Google Calendar
+  const downloadTaskIcs = (task: { title: string; description?: string; dueDate?: string; dueTime?: string }) => {
+    const dueTime = task.dueTime || '18:00';
+    const dueDate = task.dueDate || new Date().toISOString().slice(0, 10);
+    const dt = dueDate.replace(/-/g, '') + 'T' + dueTime.replace(':', '') + '00';
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//PRIME Teamwork//Task Calendar//TH',
+      'BEGIN:VEVENT',
+      `SUMMARY:[PRIME] ${task.title.replace(/[\r\n]/g, ' ')}`,
+      `DESCRIPTION:${(task.description || '').replace(/\n/g, '\\n')}`,
+      `DTSTART:${dt}`,
+      `DTEND:${dt}`,
+      'STATUS:CONFIRMED',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ];
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `prime-task-${task.title.slice(0, 20)}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notify('ดาวน์โหลดไฟล์ปฏิทิน (.ics) เรียบร้อย 📅');
+  };
+
+  // Automated Email Draft Notification
+  const openTaskEmailDraft = (task: TaskItem) => {
+    const assigneeNames = task.assignees.map(a => a.name).join(', ');
+    const subject = encodeURIComponent(`[PRIME Virtual Office] มอบหมายงาน: ${task.title}`);
+    const body = encodeURIComponent(
+      `สวัสดีครับคุณ ${assigneeNames}\n\n` +
+      `มีการมอบหมายงานใหม่ในระบบ PRIME TEAMWORK:\n\n` +
+      `📌 ชื่องาน: ${task.title}\n` +
+      `📝 รายละเอียด: ${task.description || '-'}\n` +
+      `⚡ ความสำคัญ: ${task.priority === 'urgent' ? 'ด่วนมาก' : task.priority === 'normal' ? 'ปกติ' : 'ไม่ด่วน'}\n` +
+      `⏰ กำหนดส่ง: ${task.dueDate || 'ไม่ระบุ'} เวลา ${task.dueTime || ''}\n` +
+      `👤 ผู้มอบหมาย: ${task.creatorName}\n\n` +
+      `กรุณาเข้าสู่ระบบ PRIME Virtual Office เพื่อติดตามงานและส่งมอบงาน:\n` +
+      `${window.location.origin}/\n`
+    );
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+  };
+
   // Task Delegation Handlers
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1558,6 +1645,12 @@ export default function App() {
       setTaskAssigneesDraft([]);
       setTaskModalOpen(false);
       notify(`มอบหมายงาน "${title}" เรียบร้อย (กำหนดส่ง: ${taskDueDateDraft || 'ไม่มีกำหนด'} ${taskDueTimeDraft || ''}) 📋`);
+      if (syncCalendarOnCreate && taskDueDateDraft) {
+        window.open(getGoogleCalendarUrl(newTaskObj), '_blank');
+      }
+      if (sendEmailOnCreate) {
+        openTaskEmailDraft(newTaskObj);
+      }
       return;
     }
 
@@ -1577,6 +1670,12 @@ export default function App() {
       setTaskModalOpen(false);
       await refresh();
       notify(`มอบหมายงาน "${title}" เรียบร้อย (กำหนดส่ง: ${taskDueDateDraft || 'ไม่มีกำหนด'} ${taskDueTimeDraft || ''}) 📋`);
+      if (syncCalendarOnCreate && taskDueDateDraft) {
+        window.open(getGoogleCalendarUrl(newTaskObj), '_blank');
+      }
+      if (sendEmailOnCreate) {
+        openTaskEmailDraft(newTaskObj);
+      }
     });
   };
 
@@ -2451,10 +2550,14 @@ export default function App() {
               onClick={handleMicClick}
               onPointerDown={handleMicPointerDown}
               onPointerUp={handleMicPointerUp}
-              title={isMuted ? "ไมค์ปิดอยู่ (กดเพื่อเปิด หรือกด Spacebar ค้างเพื่อพูด)" : "ไมค์เปิดอยู่ (กำลังส่งเสียง)"}
+              title={
+                micMode === 'open'
+                  ? (isMuted ? 'ไมค์ปิดอยู่ (คลิกเปิดเพื่อพูดคุยต่อเนื่อง)' : 'ไมค์เปิดอยู่ (คลิกปิดไมค์)')
+                  : 'โหมด Push-to-Talk (กด Spacebar หรือกดค้างเพื่อพูด)'
+              }
             >
               {isMuted ? <MicOff size={15} /> : <Mic size={15} />}
-              <span>{isSpeaking ? 'กำลังพูด…' : isMuted ? 'ไมค์ปิด (Spacebar)' : 'ไมค์เปิด'}</span>
+              <span>{isSpeaking ? 'กำลังพูด…' : isMuted ? (micMode === 'open' ? 'ไมค์ปิด' : 'กดพูด (PTT)') : 'ไมค์เปิด'}</span>
             </button>
             <button className="dock-btn" style={{ minWidth: '36px', height: '36px' }} onClick={() => toggleMute()} title="สลับไมค์">
               {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
@@ -3758,6 +3861,37 @@ export default function App() {
                                     })}
                                   </div>
                                 </div>
+                                 {/* Task Calendar Sync & Email Actions */}
+                                 <div className="task-calendar-actions">
+                                   <a
+                                     href={getGoogleCalendarUrl(task)}
+                                     target="_blank"
+                                     rel="noreferrer"
+                                     className="task-cal-btn google"
+                                     title="เพิ่มงานนี้ลง Google Calendar ทันที"
+                                   >
+                                     <Calendar size={12} />
+                                     <span>Google Calendar</span>
+                                   </a>
+                                   <button
+                                     type="button"
+                                     className="task-cal-btn"
+                                     onClick={() => downloadTaskIcs(task)}
+                                     title="ดาวน์โหลดไฟล์ .ics นำเข้า Apple Calendar หรือ Outlook"
+                                   >
+                                     <Download size={12} />
+                                     <span>โหลด .ics</span>
+                                   </button>
+                                   <button
+                                     type="button"
+                                     className="task-cal-btn email"
+                                     onClick={() => openTaskEmailDraft(task)}
+                                     title="เปิดร่างอีเมลแจ้งเตือนผู้รับมอบหมายงาน"
+                                   >
+                                     <Mail size={12} />
+                                     <span>ส่งเมลแจ้งเตือน</span>
+                                   </button>
+                                 </div>
                               </article>
                             );
                           })
@@ -4421,6 +4555,27 @@ export default function App() {
                 </small>
               </div>
 
+              {/* Automation Checkboxes */}
+              <div style={{ textAlign: 'left', background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', margin: '14px 0' }}>
+                <strong style={{ fontSize: '11px', color: '#334155', display: 'block', marginBottom: '8px' }}>🚀 ระบบช่วยจัดการอัตโนมัติ (Automations):</strong>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#475569', marginBottom: '6px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={syncCalendarOnCreate}
+                    onChange={e => setSyncCalendarOnCreate(e.target.checked)}
+                  />
+                  <span>📅 เพิ่มลง Google Calendar ของฉันทันทีหลังมอบหมาย</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#475569', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={sendEmailOnCreate}
+                    onChange={e => setSendEmailOnCreate(e.target.checked)}
+                  />
+                  <span>📧 ส่งอีเมลแจ้งเตือนถึงผู้รับมอบหมายงานอัตโนมัติ</span>
+                </label>
+              </div>
+
               <div className="button-row" style={{ marginTop: '20px' }}>
                 <button type="button" className="secondary" onClick={() => setTaskModalOpen(false)}>ยกเลิก</button>
                 <button type="submit" className="primary" disabled={busy || taskAssigneesDraft.length === 0}>
@@ -4516,6 +4671,28 @@ export default function App() {
             </div>
           </div>
           <div className="huddle-dock-actions">
+            {/* Mic Mode Selector: Open Mic vs Push-to-Talk */}
+            <div className="huddle-mode-toggle" role="group" aria-label="เลือกโหมดไมค์">
+              <button
+                type="button"
+                className={`huddle-mode-btn ${micMode === 'open' ? 'active' : ''}`}
+                onClick={() => handleSetMicMode('open')}
+                title="โหมดเปิดไมค์ทิ้ง (คลิกเปิด/ปิดไมค์ พูดคุยต่อเนื่องได้อิสระ)"
+              >
+                <Mic size={11} />
+                <span>เปิดไมค์ทิ้ง</span>
+              </button>
+              <button
+                type="button"
+                className={`huddle-mode-btn ${micMode === 'ptt' ? 'active' : ''}`}
+                onClick={() => handleSetMicMode('ptt')}
+                title="โหมด Push-to-Talk (กด Spacebar หรือกดปุ่มค้างเพื่อพูด)"
+              >
+                <Radio size={11} />
+                <span>กดค้างพูด (Spacebar)</span>
+              </button>
+            </div>
+
             <button
               type="button"
               className={`huddle-dock-btn ${!isMuted ? (isSpeaking ? 'active speaking' : 'active') : 'muted'}`}
@@ -4523,10 +4700,18 @@ export default function App() {
               onPointerUp={handleMicPointerUp}
               onPointerLeave={handleMicPointerLeave}
               onClick={handleMicClick}
-              title="คลิกเพื่อเปิด/ปิดไมค์ หรือกดค้างเพื่อพูด (Spacebar)"
+              title={
+                micMode === 'open'
+                  ? (!isMuted ? 'ไมค์เปิดอยู่ คลิกเพื่อปิดไมค์' : 'ไมค์ปิดอยู่ คลิกเพื่อเปิดไมค์พูดคุยต่อเนื่อง')
+                  : 'โหมด Push-to-Talk: กดปุ่มนี้หรือกด Spacebar ค้างเพื่อพูด'
+              }
             >
               {!isMuted ? <Mic size={16} className={isSpeaking ? 'pulse-icon' : ''} /> : <MicOff size={16} />}
-              <span>{!isMuted ? (isSpeaking ? 'กำลังพูด…' : 'ไมค์เปิด') : 'กดพูด (หรือกดค้าง)'}</span>
+              <span>
+                {micMode === 'open'
+                  ? (!isMuted ? (isSpeaking ? 'กำลังพูด…' : 'ไมค์เปิด') : 'ไมค์ปิด')
+                  : (isSpeaking ? 'กำลังพูด…' : 'กดค้างพูด')}
+              </span>
             </button>
             <button
               className={`huddle-dock-btn ${isDeafened ? 'muted' : ''}`}

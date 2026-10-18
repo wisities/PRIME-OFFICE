@@ -132,7 +132,7 @@
 .pulse-icon{animation:huddlePulse 1.8s infinite ease-in-out;color:#39b982}
 @keyframes huddlePulse{0%{transform:scale(0.92);opacity:0.8}50%{transform:scale(1.15);opacity:1}100%{transform:scale(0.92);opacity:0.8}}
 
-.huddle-floating-dock{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#102535ee;backdrop-filter:blur(14px);color:#fff;border:1px solid #ffffff24;border-radius:24px;padding:10px 18px;display:flex;align-items:center;gap:20px;box-shadow:0 12px 40px #091a2766;z-index:180;max-width:94vw;width:max-content}
+.huddle-floating-dock{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:#102535f2;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:22px;padding:8px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 14px 40px rgba(5,17,28,0.5);z-index:135;max-width:95vw;width:max-content;transition:all .25s cubic-bezier(0.16,1,0.3,1)}
 .huddle-dock-info{display:flex;align-items:center;gap:12px}
 .huddle-dock-dot{width:32px;height:32px;background:#1e445b;border-radius:50%;display:grid;place-items:center;flex-shrink:0}
 .huddle-dock-info strong{display:block;font-size:12px;color:#f0f6fa}
@@ -148,8 +148,8 @@
 .huddle-dock-btn.hangup:hover{background:#dc4437}
 
 @media(max-width:700px){
-  .huddle-floating-dock{flex-direction:column;gap:10px;padding:12px 14px;border-radius:18px;bottom:16px;width:92vw}
-  .huddle-dock-actions{width:100%;justify-content:center}
+  .huddle-floating-dock{flex-direction:column;gap:8px;padding:10px 14px;border-radius:18px;bottom:72px;width:min(420px,94vw)}
+  .huddle-dock-actions{width:100%;justify-content:center;flex-wrap:wrap} .huddle-mode-toggle{width:100%;justify-content:center}
 }
 
 /* Push-to-Talk & Lock Notice Styles */
@@ -4083,4 +4083,30 @@
 
 .lightbox-download-btn:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+/* VOICE HUDDLE MIC MODE CONTROLS */
+.huddle-mode-toggle { display: inline-flex; align-items: center; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 12px; padding: 2px; gap: 2px; }
+.huddle-mode-btn { background: transparent; border: 0; color: #9cb8ca; font-size: 10px; font-weight: 500; padding: 4px 8px; border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; white-space: nowrap; }
+.huddle-mode-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.1); }
+.huddle-mode-btn.active { background: #1e5275; color: #ffffff; font-weight: 600; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); }
+
+/* TASK CALENDAR & EMAIL NOTIFICATION ACTIONS */
+.task-calendar-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
+.task-cal-btn { display: inline-flex; align-items: center; gap: 5px; background: #f8fafc; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px 9px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; text-decoration: none; }
+.task-cal-btn:hover { background: #e2e8f0; color: #0f172a; }
+.task-cal-btn.google { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.task-cal-btn.google:hover { background: #dbeafe; }
+.task-cal-btn.email { background: #fdf4ff; color: #86198f; border-color: #f5d0fe; }
+.task-cal-btn.email:hover { background: #fae8ff; }
+
+/* MOBILE RESPONSIVE ENHANCEMENTS */
+@media (max-width: 600px) {
+  .floating-room-popover { position: fixed !important; left: 10px !important; right: 10px !important; bottom: 74px !important; width: auto !important; max-width: calc(100vw - 20px) !important; z-index: 130 !important; }
+  .drawer-body { padding-bottom: 90px !important; }
+  .task-summary-row { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+  .task-filter-chips { overflow-x: auto; white-space: nowrap; padding-bottom: 4px; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .task-action-bar { flex-direction: column; align-items: stretch !important; gap: 8px !important; }
+  .create-task-trigger-btn { width: 100% !important; justify-content: center !important; }
+  .task-deadline-form-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
 }
