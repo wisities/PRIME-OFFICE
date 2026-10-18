@@ -2339,29 +2339,54 @@ export default function App() {
                   <span className="room-count-badge">{people.length}</span>
                 </button>
                 <div className="map-avatars">
-                  {people.slice(0, 5).map(m => (
-                    <button
-                      type="button"
-                      key={m.id}
-                      className="map-person"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelected(r.id);
-                        if (m.id !== me.id) {
-                          if (m.room === 'focus') {
-                            notify(`${m.name} อยู่ในห้อง Focus Zone (กำลังโฟกัสงาน) ปิดรับคำขอคุย กรุณาโทรเบอร์มือถือหากมีงานด่วน 📵`);
-                          } else {
-                            setKnockTarget(m);
-                          }
-                        }
-                      }}
-                      aria-label={`${m.name} ${statuses[m.status]}`}
-                      title={m.room === 'focus' ? `${m.name}: กำลังโฟกัสงานใน Focus Zone (กรุณาโทรเบอร์มือถือหากมีงานด่วน)` : `${m.name}: ${statuses[m.status]}`}
-                    >
-                      <Avatar member={m} small isSpeaking={speakingMembers.has(m.id) || (m.id === me.id && isSpeaking)} />
-                      <span>{m.id === me.id ? `${m.name} (คุณ)` : m.name}</span>
-                    </button>
-                  ))}
+                  {people.slice(0, 5).map(m => {
+                    const isMe = m.id === me.id;
+                    const petTypeForMember: PetType = isMe
+                      ? myPetType
+                      : (m.id === 'may' ? 'cat' : m.id === 'nan' ? 'frog' : m.id === 'kong' ? 'dog' : m.id === 'beam' ? 'hamster' : m.id === 'ploy' ? 'toad' : 'cat');
+                    const petNameForMember = isMe ? myPetName : (m.id === 'may' ? 'น้องส้ม' : m.id === 'nan' ? 'พี่กบ' : m.id === 'kong' ? 'เจ้าม่อน' : m.id === 'beam' ? 'เจ้านิ่ม' : m.id === 'ploy' ? 'กบทอง' : 'สัตว์เลี้ยง');
+
+                    return (
+                      <div key={m.id} className="doll-occupant-group">
+                        <DollAvatar
+                          member={m}
+                          isSpeaking={speakingMembers.has(m.id) || (isMe && isSpeaking)}
+                          isMoving={isMe ? isWalking : false}
+                          facing={isMe ? walkDirection : 'right'}
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelected(r.id);
+                            if (!isMe) {
+                              if (m.room === 'focus') {
+                                notify(`${m.name} อยู่ในห้อง Focus Zone (กำลังโฟกัสงาน) ปิดรับคำขอคุย กรุณาโทรเบอร์มือถือหากมีงานด่วน 📵`);
+                              } else {
+                                setKnockTarget(m);
+                              }
+                            } else {
+                              setIsWalking(true);
+                              setWalkDirection(prev => prev === 'left' ? 'right' : 'left');
+                              setTimeout(() => setIsWalking(false), 1200);
+                            }
+                          }}
+                        />
+                        <CompanionPet
+                          type={petTypeForMember}
+                          name={petNameForMember}
+                          isWalking={isMe ? isWalking : false}
+                          facing={isMe ? walkDirection : 'right'}
+                          size="small"
+                          onClick={() => {
+                            if (isMe) {
+                              notify(`ลูบหัว ${myPetName || 'สัตว์เลี้ยง'} แล้ว มีความสุขจัง! 💕`);
+                            } else {
+                              notify(`ลูบหัวสัตว์เลี้ยงของ ${m.name} อย่างอ่อนโยน 💕`);
+                            }
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                   {people.length > 5 && <span className="more-people">+{people.length - 5}</span>}
                 </div>
               </div>
@@ -4347,9 +4372,12 @@ export default function App() {
             <button autoFocus className="icon-button close-modal" aria-label="ปิด" onClick={() => setProfileOpen(false)}><X /></button>
             <h2 id="profile-title">แก้ไขโปรไฟล์</h2>
             <p>เปลี่ยนชื่อที่แสดงและเลือกรูปการ์ตูนประจำตัวของคุณ</p>
-            <div className="avatar-preview-box">
-              <Avatar member={{ ...me, name: editName || 'คุณ', avatarUrl: editAvatar }} />
-              <small style={{ color: '#7e95a3' }}>ตัวอย่างที่คนอื่นเห็น</small>
+            <div className="avatar-preview-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
+                <DollAvatar member={{ ...me, name: editName || 'คุณ', avatarUrl: editAvatar }} size="normal" />
+                <CompanionPet type={editPetType} name={editPetName || undefined} size="normal" />
+              </div>
+              <small style={{ color: '#7e95a3' }}>ตัวอย่างตุ๊กตาหุ่นและสัตว์เลี้ยงคู่ใจของคุณ</small>
             </div>
             <form onSubmit={e => { e.preventDefault(); void saveProfile(); }}>
               <div style={{ textAlign: 'left', marginBottom: '14px' }}>
@@ -4377,6 +4405,42 @@ export default function App() {
                 </div>
                 <small style={{ color: '#94a3b8', fontSize: '10px', display: 'block', marginTop: '4px' }}>
                   รองรับไฟล์ภาพจากมือถือหรือคอมพิวเตอร์ (ปรับขนาดอัตโนมัติ)
+                </small>
+              </div>
+
+              <div style={{ textAlign: 'left', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '6px' }}>
+                  🐾 สัตว์เลี้ยงคู่ใจประจำตัว (Companion Pet)
+                </label>
+                <div className="pet-selection-grid">
+                  {(Object.entries(PET_CATALOG) as [PetType, typeof PET_CATALOG[PetType]][]).map(([pType, pInfo]) => (
+                    <button
+                      type="button"
+                      key={pType}
+                      className={`pet-select-card ${editPetType === pType ? 'active' : ''}`}
+                      onClick={() => setEditPetType(pType)}
+                      title={pInfo.desc}
+                    >
+                      <span className="pet-select-emoji">{pInfo.emoji}</span>
+                      <span className="pet-select-name">{pInfo.label.split(' ')[0]}</span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ marginTop: '10px' }}>
+                  <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>
+                    ชื่อเล่นสัตว์เลี้ยงของคุณ
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={30}
+                    style={{ width: '100%', fontSize: '12px', padding: '7px 10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    value={editPetName}
+                    onChange={e => setEditPetName(e.target.value)}
+                    placeholder="เช่น เจ้าส้ม, กาแฟ, บารมีโชคลาภ..."
+                  />
+                </div>
+                <small style={{ color: '#64748b', display: 'block', marginTop: '6px', fontSize: '11px' }}>
+                  💡 {PET_CATALOG[editPetType]?.desc} (คลิกตัวสัตว์เลี้ยงบนออฟฟิศเพื่อลูบหัวได้ 💕)
                 </small>
               </div>
 
