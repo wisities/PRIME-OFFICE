@@ -4110,3 +4110,1088 @@
   .create-task-trigger-btn { width: 100% !important; justify-content: center !important; }
   .task-deadline-form-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
 }
+
+/* ========================================================
+   1. DOLL AVATAR (WALKABLE 2D DOLL/PUPPET AVATAR)
+   ======================================================== */
+.doll-avatar-root {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  user-select: none;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.doll-avatar-root:hover .doll-name-tag {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(10, 30, 50, 0.2);
+}
+
+.doll-name-tag-wrapper {
+  position: absolute;
+  top: -24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.doll-name-tag {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  padding: 1px 7px;
+  border-radius: 12px;
+  font-size: 10px;
+  color: #1e3a5f;
+  box-shadow: 0 2px 8px rgba(15, 30, 45, 0.15);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.doll-name-tag.speaking {
+  background: #10b981;
+  color: #ffffff;
+  border-color: #059669;
+}
+
+.doll-sleep-bubble {
+  position: absolute;
+  top: -14px;
+  right: -12px;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 10px;
+  animation: sleepBubbleFloat 1.8s infinite ease-in-out;
+}
+
+@keyframes sleepBubbleFloat {
+  0% { transform: translateY(0) scale(0.9); opacity: 0.7; }
+  50% { transform: translateY(-4px) scale(1.1); opacity: 1; }
+  100% { transform: translateY(0) scale(0.9); opacity: 0.7; }
+}
+
+.doll-shadow {
+  position: absolute;
+  bottom: -3px;
+  width: 32px;
+  height: 8px;
+  background: rgba(20, 35, 50, 0.25);
+  border-radius: 50%;
+  filter: blur(1.5px);
+}
+
+.doll-puppet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Head */
+.doll-head {
+  position: relative;
+  width: 44px;
+  height: 42px;
+  border-radius: 50% 50% 46% 46%;
+  box-shadow: 0 4px 10px rgba(15, 35, 55, 0.18), inset 0 -3px 6px rgba(0,0,0,0.06);
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+}
+
+.doll-face-photo {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Hair */
+.doll-hair {
+  position: absolute;
+  top: -4px;
+  left: 2px;
+  right: 2px;
+  height: 22px;
+  background: #3e2723;
+  border-radius: 20px 20px 8px 8px;
+  z-index: 2;
+}
+
+.doll-hair.style-bob { background: #4a2c11; border-radius: 18px 18px 4px 4px; }
+.doll-hair.style-curly { background: #2d1810; border-radius: 24px 24px 6px 6px; box-shadow: -2px 2px 0 #2d1810, 2px 2px 0 #2d1810; }
+.doll-hair.style-ponytail { background: #5c3818; }
+.doll-hair.style-ponytail::after { content: ''; position: absolute; right: -6px; top: 2px; width: 10px; height: 16px; background: inherit; border-radius: 50%; }
+
+/* Eyes */
+.doll-eyes {
+  position: absolute;
+  top: 17px;
+  display: flex;
+  gap: 12px;
+  z-index: 4;
+}
+
+.doll-eye {
+  width: 4px;
+  height: 5px;
+  background: #1e293b;
+  border-radius: 50%;
+  animation: dollEyeBlink 4.5s infinite ease-in-out;
+}
+
+@keyframes dollEyeBlink {
+  0%, 96%, 100% { transform: scaleY(1); }
+  98% { transform: scaleY(0.1); }
+}
+
+.doll-blush {
+  position: absolute;
+  top: 22px;
+  width: 6px;
+  height: 3px;
+  background: #fb7185;
+  border-radius: 50%;
+  opacity: 0.65;
+}
+.doll-blush.left { left: 6px; }
+.doll-blush.right { right: 6px; }
+
+.doll-mouth {
+  position: absolute;
+  top: 25px;
+  width: 6px;
+  height: 3px;
+  border-bottom: 1.5px solid #64748b;
+  border-radius: 0 0 6px 6px;
+}
+
+/* Torso */
+.doll-torso {
+  position: relative;
+  width: 26px;
+  height: 22px;
+  margin-top: -3px;
+  border-radius: 6px 6px 4px 4px;
+  z-index: 4;
+  box-shadow: inset 0 -2px 4px rgba(0,0,0,0.12);
+}
+
+.doll-collar {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 5px;
+  border-radius: 0 0 4px 4px;
+}
+
+.doll-badge-pin {
+  position: absolute;
+  top: 7px;
+  left: 4px;
+  width: 4px;
+  height: 5px;
+  background: #facc15;
+  border-radius: 1px;
+}
+
+/* Arms */
+.doll-arm {
+  position: absolute;
+  top: 3px;
+  width: 6px;
+  height: 16px;
+  border-radius: 3px;
+  transform-origin: top center;
+}
+.doll-arm.left { left: -5px; }
+.doll-arm.right { right: -5px; }
+.doll-hand {
+  position: absolute;
+  bottom: -2px;
+  width: 6px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+/* Legs & Shoes */
+.doll-legs {
+  display: flex;
+  gap: 5px;
+  margin-top: -1px;
+  z-index: 3;
+}
+
+.doll-leg {
+  position: relative;
+  width: 8px;
+  height: 14px;
+  border-radius: 0 0 2px 2px;
+  transform-origin: top center;
+}
+
+.doll-shoe {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 5px;
+  background: #0f172a;
+  border-radius: 3px 3px 2px 2px;
+}
+
+/* Status Dot on Doll */
+.doll-status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+}
+.doll-status-dot.available { background: #10b981; }
+.doll-status-dot.focus { background: #f59e0b; }
+.doll-status-dot.away { background: #94a3b8; }
+.doll-status-dot.offline { background: #cbd5e1; }
+
+/* Walking Animation Cycle */
+.doll-avatar-root.is-walking .doll-puppet {
+  animation: dollWalkBob 0.35s infinite alternate ease-in-out;
+}
+.doll-avatar-root.is-walking .doll-leg.left {
+  animation: dollLegLeft 0.35s infinite alternate ease-in-out;
+}
+.doll-avatar-root.is-walking .doll-leg.right {
+  animation: dollLegRight 0.35s infinite alternate ease-in-out;
+}
+.doll-avatar-root.is-walking .doll-arm.left {
+  animation: dollArmLeft 0.35s infinite alternate ease-in-out;
+}
+.doll-avatar-root.is-walking .doll-arm.right {
+  animation: dollArmRight 0.35s infinite alternate ease-in-out;
+}
+
+@keyframes dollWalkBob {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-4px); }
+}
+
+@keyframes dollLegLeft {
+  0% { transform: rotate(20deg); }
+  100% { transform: rotate(-20deg); }
+}
+
+@keyframes dollLegRight {
+  0% { transform: rotate(-20deg); }
+  100% { transform: rotate(20deg); }
+}
+
+@keyframes dollArmLeft {
+  0% { transform: rotate(-18deg); }
+  100% { transform: rotate(18deg); }
+}
+
+@keyframes dollArmRight {
+  0% { transform: rotate(18deg); }
+  100% { transform: rotate(-18deg); }
+}
+
+/* ========================================================
+   2. COMPANION PET STYLES
+   ======================================================== */
+.companion-pet-wrapper {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.companion-pet-wrapper:hover {
+  transform: scale(1.15);
+}
+
+.pet-creature {
+  font-size: 24px;
+  line-height: 1;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.pet-walking {
+  animation: petHop 0.35s infinite alternate ease-in-out;
+}
+
+@keyframes petHop {
+  0% { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(-6px) rotate(4deg); }
+}
+
+.pet-name-pill {
+  font-size: 8px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 1px 5px;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  white-space: nowrap;
+  color: #334155;
+  margin-top: 2px;
+}
+
+.pet-floating-heart {
+  position: absolute;
+  top: -18px;
+  font-size: 14px;
+  animation: petHeartAscend 1.2s forwards ease-out;
+  pointer-events: none;
+}
+
+@keyframes petHeartAscend {
+  0% { opacity: 1; transform: translateY(0) scale(0.8); }
+  100% { opacity: 0; transform: translateY(-24px) scale(1.3); }
+}
+
+.pet-speech-bubble {
+  position: absolute;
+  top: -26px;
+  background: #1e293b;
+  color: #ffffff;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  animation: fadeInPop 0.15s ease-out;
+  z-index: 10;
+}
+
+/* ========================================================
+   3. ARCADE LOUNGE & PARTY GAMES MODAL
+   ======================================================== */
+.arcade-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 25, 38, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.arcade-modal-window {
+  background: #ffffff;
+  border-radius: 24px;
+  width: min(860px, 96vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 70px rgba(10, 25, 45, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  animation: fadeInPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.arcade-modal-header {
+  padding: 18px 24px;
+  background: #172d3f;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.arcade-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.arcade-brand-icon {
+  width: 42px;
+  height: 42px;
+  background: #234b68;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #38bdf8;
+}
+
+.arcade-header-brand h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: #f8fafc;
+}
+
+.arcade-header-brand p {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.arcade-close-btn {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border: 0;
+  border-radius: 10px;
+  padding: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.arcade-close-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.arcade-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Highlight Go-Kart Card */
+.gokart-banner-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+  color: #ffffff;
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 10px 30px rgba(30, 58, 138, 0.25);
+}
+
+.gokart-banner-art {
+  font-size: 50px;
+  flex-shrink: 0;
+}
+
+.gokart-banner-content h3 {
+  font-size: 18px;
+  margin: 6px 0;
+  color: #ffffff;
+}
+
+.gokart-banner-content p {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.gokart-banner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.gokart-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.start-gokart-btn {
+  background: #f59e0b;
+  color: #0f172a;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+  transition: all 0.15s ease;
+}
+
+.start-gokart-btn:hover {
+  background: #fbbf24;
+  transform: translateY(-1px);
+}
+
+.gokart-tips {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* Custom game adder */
+.custom-game-adder-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px 18px;
+}
+
+.custom-game-adder-box h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.custom-game-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.custom-game-name-input {
+  flex: 1;
+  min-width: 180px;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.custom-game-url-input {
+  flex: 2;
+  min-width: 220px;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.custom-game-add-btn {
+  background: #1c4d6b;
+  color: #ffffff;
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Party Games Grid */
+.party-games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.party-game-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+}
+
+.party-game-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+}
+
+.game-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.game-card-emoji {
+  font-size: 26px;
+}
+
+.game-card-title-group strong {
+  display: block;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.game-category-tag {
+  font-size: 10px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.game-card-desc {
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.5;
+  margin: 0 0 12px;
+  flex: 1;
+}
+
+.game-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 10px;
+}
+
+.game-players-info {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.launch-game-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f0f9ff;
+  color: #0284c7;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.launch-game-link:hover {
+  background: #e0f2fe;
+}
+
+/* ========================================================
+   4. OFFICE GO-KART TRACK OVERLAY & HUD
+   ======================================================== */
+.gokart-track-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+}
+
+.gokart-hud-top {
+  height: 64px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  color: #ffffff;
+  z-index: 20;
+}
+
+.gokart-hud-item.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gokart-hud-item.brand strong {
+  font-size: 13px;
+  color: #f8fafc;
+  letter-spacing: 0.5px;
+}
+
+.gokart-hud-item.brand small {
+  display: block;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.gokart-hud-stats {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.hud-metric {
+  text-align: center;
+}
+
+.hud-metric-label {
+  display: block;
+  font-size: 9px;
+  color: #94a3b8;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.hud-metric-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: #38bdf8;
+  font-family: monospace;
+}
+
+.hud-metric-val small {
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.hud-metric.gold .hud-metric-val {
+  color: #facc15;
+}
+
+.hud-metric.best .hud-metric-val {
+  color: #4ade80;
+}
+
+.gokart-hud-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gokart-hud-btn {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border: 0;
+  border-radius: 10px;
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.gokart-exit-btn {
+  background: #dc2626;
+  color: #ffffff;
+  border: 0;
+  border-radius: 10px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.gokart-stage-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.gokart-start-line {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.finish-checkered {
+  width: 90px;
+  height: 12px;
+  background-image: repeating-linear-gradient(45deg, #000 0, #000 6px, #fff 6px, #fff 12px);
+  border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.start-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: #ffffff;
+  background: #0f172a;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+/* Gold Coins */
+.gokart-gold-coin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 20px;
+  animation: coinBob 1.2s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes coinBob {
+  0% { transform: translate(-50%, -50%) translateY(0); }
+  100% { transform: translate(-50%, -50%) translateY(-6px); }
+}
+
+/* Go-Kart Vehicle */
+.gokart-vehicle {
+  position: absolute;
+  width: 36px;
+  height: 48px;
+  pointer-events: none;
+  z-index: 10;
+  transition: filter 0.15s ease;
+}
+
+.gokart-chassis {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #dc2626;
+  border-radius: 8px 8px 12px 12px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+  border: 2px solid #ffffff;
+}
+
+.gokart-front-bumper {
+  position: absolute;
+  top: -4px;
+  left: 2px;
+  right: 2px;
+  height: 6px;
+  background: #0f172a;
+  border-radius: 4px 4px 0 0;
+}
+
+.gokart-spoiler {
+  position: absolute;
+  bottom: -4px;
+  left: -2px;
+  right: -2px;
+  height: 6px;
+  background: #0f172a;
+  border-radius: 2px;
+}
+
+.gokart-wheels {
+  position: absolute;
+  width: 6px;
+  height: 12px;
+  background: #18181b;
+  border-radius: 2px;
+}
+.gokart-wheels.front-left { top: 4px; left: -7px; }
+.gokart-wheels.front-right { top: 4px; right: -7px; }
+.gokart-wheels.rear-left { bottom: 4px; left: -7px; }
+.gokart-wheels.rear-right { bottom: 4px; right: -7px; }
+
+.gokart-pilot {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+}
+
+.gokart-number {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.gokart-pilot-tag {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  background: rgba(15, 23, 42, 0.9);
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gokart-flame {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 16px;
+  background: radial-gradient(circle, #f59e0b 0%, #ef4444 80%, transparent 100%);
+  border-radius: 50%;
+  animation: boostFlame 0.1s infinite alternate;
+}
+
+@keyframes boostFlame {
+  0% { transform: translateX(-50%) scale(0.9); }
+  100% { transform: translateX(-50%) scale(1.3); }
+}
+
+/* Mobile On-Screen Controls */
+.gokart-mobile-controls {
+  display: none;
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  padding: 0 20px;
+  justify-content: space-between;
+  align-items: flex-end;
+  pointer-events: none;
+  z-index: 30;
+}
+
+@media (max-width: 768px) {
+  .gokart-mobile-controls {
+    display: flex;
+  }
+}
+
+.mobile-dpad, .mobile-pedals {
+  display: flex;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.dpad-btn, .pedal-btn {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(10px);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 16px;
+  padding: 14px 18px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.pedal-btn.gas {
+  background: #15803d;
+  color: #ffffff;
+}
+
+.pedal-btn.brake {
+  background: #b91c1c;
+  color: #ffffff;
+}
+
+.pedal-btn.nitro {
+  background: #d97706;
+  color: #ffffff;
+}
+
+
+/* Doll Occupant Group & Pet Layout */
+.doll-occupant-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.doll-occupant-group:hover {
+  transform: translateY(-4px) scale(1.05);
+  z-index: 20;
+}
+
+/* Island Arcade Button */
+.island-arcade-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.island-arcade-btn:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.5);
+}
+
+/* Pet selector in Profile Modal */
+.pet-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(65px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pet-select-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pet-select-card:hover {
+  border-color: #cbd5e1;
+  background: #ffffff;
+}
+
+.pet-select-card.active {
+  border-color: #8b5cf6;
+  background: #f5f3ff;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+}
+
+.pet-select-emoji {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.pet-select-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: #334155;
+  text-align: center;
+}
+
+.pet-preview-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border-radius: 14px;
+  margin: 10px 0;
+  border: 1px dashed #cbd5e1;
+}

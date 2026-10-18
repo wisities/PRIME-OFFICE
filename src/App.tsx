@@ -7,7 +7,7 @@ import {
   Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles,
   Maximize2, Minimize2, Camera, Heart, ThumbsUp, CheckSquare, MessageSquare, Send,
   Zap, AlertTriangle, Calendar, UserCheck, Square, MessageCircle, Lock, Search, ArrowLeft,
-  Image as ImageIcon, Download, Mail
+  Image as ImageIcon, Download, Mail, Gamepad2
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import {
@@ -23,6 +23,10 @@ import {
 } from './domain.mjs';
 import { VoiceHuddleClient, playChime, playAlertChime } from './voice';
 import { VideoConferenceClient } from './conference';
+import { DollAvatar } from './DollAvatar';
+import { CompanionPet, type PetType, PET_CATALOG } from './CompanionPet';
+import { ArcadeModal } from './ArcadeModal';
+import { GoKartTrack } from './GoKartTrack';
 import { ConferenceModal } from './ConferenceModal';
 
 export interface TaskAssignee {
@@ -391,6 +395,28 @@ export default function App() {
   const [customAvatar, setCustomAvatar] = useState(() => localStorage.getItem('prime-user-avatar') || localStorage.getItem('prime-demo-avatar') || '');
   const [demoName, setDemoName] = useState(() => localStorage.getItem('prime-demo-name') || localStorage.getItem('prime-user-name') || 'คุณ');
   const [demoAvatar, setDemoAvatar] = useState(() => localStorage.getItem('prime-demo-avatar') || localStorage.getItem('prime-user-avatar') || '');
+
+  // Companion Pet & Walkable Puppet State
+  const [myPetType, setMyPetType] = useState<PetType>(() => {
+    return (localStorage.getItem('prime_user_pet_type') as PetType) || 'cat';
+  });
+  const [myPetName, setMyPetName] = useState<string>(() => {
+    return localStorage.getItem('prime_user_pet_name') || 'เจ้าส้ม';
+  });
+  const [editPetType, setEditPetType] = useState<PetType>(() => {
+    return (localStorage.getItem('prime_user_pet_type') as PetType) || 'cat';
+  });
+  const [editPetName, setEditPetName] = useState<string>(() => {
+    return localStorage.getItem('prime_user_pet_name') || 'เจ้าส้ม';
+  });
+
+  // Walking state for player puppet
+  const [isWalking, setIsWalking] = useState(false);
+  const [walkDirection, setWalkDirection] = useState<'left' | 'right'>('right');
+
+  // Arcade & Office Go-Kart
+  const [arcadeModalOpen, setArcadeModalOpen] = useState(false);
+  const [goKartActive, setGoKartActive] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
@@ -1316,6 +1342,22 @@ export default function App() {
       notify(values.room_id ? 'เข้าห้อง ' + rooms.find(r => r.id === values.room_id)?.name + ' แล้ว' : 'บันทึกเรียบร้อย');
     });
   }
+
+    const handleMoveRoomWithWalk = async (newRoomId: RoomId) => {
+    if (newRoomId === me.room) return;
+    const roomOrder: Record<RoomId, number> = { hub: 1, project: 2, coffee: 3, focus: 4 };
+    const curr = roomOrder[me.room] || 1;
+    const next = roomOrder[newRoomId] || 1;
+    setWalkDirection(next >= curr ? 'right' : 'left');
+    setIsWalking(true);
+    try {
+      await updateProfile({ room_id: newRoomId });
+    } finally {
+      setTimeout(() => {
+        setIsWalking(false);
+      }, 1500);
+    }
+  };
 
   async function saveProfile() {
     const trimmed = editName.trim();
@@ -2367,7 +2409,7 @@ export default function App() {
                 <div className="room-popover-actions">
                   {!isMyRoom ? (
                     <>
-                      <button className="primary" onClick={() => void updateProfile({ room_id: activeR.id })}>
+                      <button className="primary" onClick={() => void handleMoveRoomWithWalk(activeR.id)}>
                         <DoorOpen size={16} /> ย้ายเข้าห้องนี้
                       </button>
                       {activeR.id !== 'focus' && (
@@ -2491,7 +2533,7 @@ export default function App() {
           </button>
           <button
             className="profile-badge-btn"
-            onClick={() => { setEditName(me.name); setEditAvatar(me.avatarUrl || ''); setProfileOpen(true); }}
+            onClick={() => { setEditName(me.name); setEditAvatar(me.avatarUrl || ''); setEditPetType(myPetType); setEditPetName(myPetName); setProfileOpen(true); }}
             title="แก้ไขโปรไฟล์ของคุณ"
           >
             <Avatar member={me} small />
@@ -2593,6 +2635,18 @@ export default function App() {
           <Video size={19} color={me.room === 'focus' ? '#94a3b8' : conferenceOpen ? '#38ef7d' : undefined} />
           <span className="dock-btn-label">Meeting</span>
           {conferenceOpen && <span className="dock-badge" style={{ background: '#10b981' }}>LIVE</span>}
+        </button>
+
+        <div className="dock-divider" />
+
+        {/* Arcade Lounge & Office Go-Kart */}
+        <button
+          className={`dock-btn ${arcadeModalOpen || goKartActive ? 'active' : ''}`}
+          onClick={() => setArcadeModalOpen(true)}
+          title="ห้องเกมผ่อนคลาย (Arcade Lounge) & ซิ่ง Go-Kart ในออฟฟิศ"
+        >
+          <Gamepad2 size={19} color="#8b5cf6" />
+          <span className="dock-btn-label">เกม & Kart</span>
         </button>
 
         <div className="dock-divider" />
@@ -4786,6 +4840,25 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 8. ARCADE LOUNGE MODAL */}
+      {arcadeModalOpen && (
+        <ArcadeModal
+          onClose={() => setArcadeModalOpen(false)}
+          onStartGoKart={() => {
+            setArcadeModalOpen(false);
+            setGoKartActive(true);
+          }}
+        />
+      )}
+
+      {/* 9. OFFICE GO-KART MINI-GAME OVERLAY */}
+      {goKartActive && (
+        <GoKartTrack
+          onExit={() => setGoKartActive(false)}
+          playerName={me.name}
+        />
       )}
 
       {/* Toast Alert */}
