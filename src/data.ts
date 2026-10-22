@@ -44,6 +44,8 @@ export type Member = {
   note?: string;
   isAdmin?: boolean;
   avatarUrl?: string;
+  pet_type?: 'cat' | 'dog' | 'hamster' | 'frog' | 'toad';
+  pet_name?: string;
   leaveToday?: { type: LeaveType; label: string; emoji: string };
 };
 

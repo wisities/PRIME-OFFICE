@@ -41,7 +41,7 @@ function VideoTile({
           ref={videoRef} 
           autoPlay 
           playsInline 
-          muted={isSelf} // Always mute local video playback to avoid feedback loop
+          muted={true} // Audio is cleanly handled by dedicated background audio elements to prevent echo and maintain uninterrupted audio
           className={`video-element ${isSelf && !participant.isScreenSharing ? 'mirror' : ''}`}
         />
       ) : (

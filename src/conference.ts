@@ -60,6 +60,7 @@ export class VideoConferenceClient {
   private remoteStreams = new Map<string, MediaStream>();
   private peerStates = new Map<string, Omit<ConferenceParticipant, 'stream'>>();
   private iceQueues = new Map<string, RTCIceCandidateInit[]>();
+  private audioElements = new Map<string, HTMLAudioElement>();
 
   // Local State
   public isCameraOn = true;
@@ -198,6 +199,16 @@ export class VideoConferenceClient {
     this.remoteStreams.clear();
     this.peerStates.clear();
     this.iceQueues.clear();
+
+    // Clean audio playback elements
+    this.audioElements.forEach((audio) => {
+      try {
+        audio.pause();
+        audio.srcObject = null;
+        audio.remove();
+      } catch {}
+    });
+    this.audioElements.clear();
 
     // Clean channels
     try { this.bc?.close(); } catch {}
@@ -584,13 +595,18 @@ export class VideoConferenceClient {
         }
       };
 
-      // Handle incoming remote media tracks
+      // Handle incoming remote media tracks (Audio + Video)
       peer.ontrack = (event) => {
-        const [remoteStream] = event.streams;
-        if (remoteStream) {
-          this.remoteStreams.set(peerId, remoteStream);
-          this.notifyState();
+        let remoteStream = (event.streams && event.streams[0]) ? event.streams[0] : this.remoteStreams.get(peerId);
+        if (!remoteStream) {
+          remoteStream = new MediaStream();
         }
+        if (!remoteStream.getTracks().includes(event.track)) {
+          remoteStream.addTrack(event.track);
+        }
+        this.remoteStreams.set(peerId, remoteStream);
+        this.attachRemoteAudio(peerId, remoteStream);
+        this.notifyState();
       };
 
       peer.onconnectionstatechange = () => {
@@ -678,11 +694,46 @@ export class VideoConferenceClient {
     }
   }
 
+  private attachRemoteAudio(peerId: string, stream: MediaStream) {
+    if (stream.getAudioTracks().length === 0) return;
+    let audio = this.audioElements.get(peerId);
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.autoplay = true;
+      audio.volume = 1.0;
+      (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+      document.body.appendChild(audio);
+      this.audioElements.set(peerId, audio);
+    }
+    if (audio.srcObject !== stream) {
+      audio.srcObject = stream;
+    }
+    audio.play().catch(err => {
+      console.warn('Conference audio autoplay blocked, will resume on user interaction:', err);
+      const resume = () => {
+        audio?.play().catch(() => {});
+        window.removeEventListener('click', resume);
+        window.removeEventListener('keydown', resume);
+      };
+      window.addEventListener('click', resume, { once: true });
+      window.addEventListener('keydown', resume, { once: true });
+    });
+  }
+
   private removePeer(peerId: string) {
     const peer = this.peers.get(peerId);
     if (peer) {
       try { peer.close(); } catch {}
       this.peers.delete(peerId);
+    }
+    const audio = this.audioElements.get(peerId);
+    if (audio) {
+      try {
+        audio.pause();
+        audio.srcObject = null;
+        audio.remove();
+      } catch {}
+      this.audioElements.delete(peerId);
     }
     this.remoteStreams.delete(peerId);
     this.peerStates.delete(peerId);

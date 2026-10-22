@@ -634,6 +634,22 @@ export default function App() {
     try { localStorage.setItem('prime-demo-leaves', JSON.stringify(demoLeaves)); } catch { }
   }, [demoLeaves]);
 
+  // Sync companion pet from database auth user metadata so switching devices syncs automatically
+  useEffect(() => {
+    if (demo || !session?.user?.id) return;
+    const meta = session.user.user_metadata;
+    if (meta?.pet_type) {
+      setMyPetType(meta.pet_type as PetType);
+      setEditPetType(meta.pet_type as PetType);
+      try { localStorage.setItem('prime_user_pet_type', meta.pet_type); } catch {}
+    }
+    if (meta?.pet_name) {
+      setMyPetName(meta.pet_name as string);
+      setEditPetName(meta.pet_name as string);
+      try { localStorage.setItem('prime_user_pet_name', meta.pet_name); } catch {}
+    }
+  }, [session?.user?.id, session?.user?.user_metadata?.pet_type, session?.user?.user_metadata?.pet_name, demo]);
+
   const refresh = useCallback(async () => {
     if (!supabase || !session || demo) return;
     const results = await Promise.all([
@@ -775,6 +791,8 @@ export default function App() {
         note: r.daily_note,
         isAdmin: r.is_admin,
         avatarUrl: r.avatar_url || (r.user_id === session?.user?.id ? myGoogleAvatar : undefined),
+        pet_type: r.pet_type,
+        pet_name: r.pet_name,
         leaveToday: memberLeave ? {
           type: memberLeave.leave_type,
           label: leaveTypesConfig[memberLeave.leave_type]?.label || 'ลางาน',
@@ -874,10 +892,10 @@ export default function App() {
   const effectiveAvatar = customAvatar || (demo ? demoAvatar : (currentLive?.avatarUrl || userAvatar || ''));
 
   const me: Member = demo
-    ? { id: demoSessionId, name: effectiveName, role: 'ทีม PRIME', room: demoState.room as RoomId, status: demoState.status as Status, online: true, color: 'blue', note: demoState.note, isAdmin: true, avatarUrl: effectiveAvatar }
+    ? { id: demoSessionId, name: effectiveName, role: 'ทีม PRIME', room: demoState.room as RoomId, status: demoState.status as Status, online: true, color: 'blue', note: demoState.note, isAdmin: true, avatarUrl: effectiveAvatar, pet_type: myPetType, pet_name: myPetName }
     : (currentLive
-      ? { ...currentLive, name: effectiveName, avatarUrl: effectiveAvatar }
-      : { id: session?.user?.id || '', name: effectiveName, role: 'ทีม PRIME', room: 'hub', status: 'available', online: false, color: 'blue', avatarUrl: effectiveAvatar });
+      ? { ...currentLive, name: effectiveName, avatarUrl: effectiveAvatar, pet_type: myPetType, pet_name: myPetName }
+      : { id: session?.user?.id || '', name: effectiveName, role: 'ทีม PRIME', room: 'hub', status: 'available', online: false, color: 'blue', avatarUrl: effectiveAvatar, pet_type: myPetType, pet_name: myPetName });
 
   // Effective Attendance & Leaves data
   const attendanceList = demo ? demoAttendance : liveAttendance;
@@ -1364,15 +1382,23 @@ export default function App() {
     if (!trimmed) { setError('กรุณาใส่ชื่อของคุณ'); return; }
     await action(async () => {
       // 1. Immediately update reactive state & local storage for instant UI reflection
+      const chosenPetType = editPetType;
+      const chosenPetName = editPetName.trim() || PET_CATALOG[editPetType]?.defaultName || 'เจ้าส้ม';
+
       setCustomName(trimmed);
       setCustomAvatar(editAvatar);
       setDemoName(trimmed);
       setDemoAvatar(editAvatar);
+      setMyPetType(chosenPetType);
+      setMyPetName(chosenPetName);
+
       try {
         localStorage.setItem('prime-user-name', trimmed);
         localStorage.setItem('prime-user-avatar', editAvatar);
         localStorage.setItem('prime-demo-name', trimmed);
         localStorage.setItem('prime-demo-avatar', editAvatar);
+        localStorage.setItem('prime_user_pet_type', chosenPetType);
+        localStorage.setItem('prime_user_pet_name', chosenPetName);
       } catch (err) {
         console.warn('Failed to store profile in localStorage:', err);
       }
@@ -1385,14 +1411,28 @@ export default function App() {
               full_name: trimmed,
               display_name: trimmed,
               avatar_url: editAvatar.startsWith('data:') ? undefined : editAvatar,
-              custom_avatar: editAvatar.startsWith('data:') ? undefined : editAvatar
+              custom_avatar: editAvatar.startsWith('data:') ? undefined : editAvatar,
+              pet_type: chosenPetType,
+              pet_name: chosenPetName
             }
           });
         } catch (err) {
           console.warn('Supabase updateUser err:', err);
         }
 
-        const { error: rpcError } = await supabase.rpc('update_my_identity', { p_name: trimmed, p_avatar: editAvatar });
+        let rpcError = null;
+        // Try calling update_my_identity with 4 params (when add-pet-identity migration is executed)
+        const res4 = await supabase.rpc('update_my_identity', {
+          p_name: trimmed,
+          p_avatar: editAvatar,
+          p_pet_type: chosenPetType,
+          p_pet_name: chosenPetName
+        });
+        if (res4.error) {
+          // Fallback to 2-param signature if database function has not been upgraded yet
+          const res2 = await supabase.rpc('update_my_identity', { p_name: trimmed, p_avatar: editAvatar });
+          rpcError = res2.error;
+        }
         if (rpcError) {
           console.error('RPC update_my_identity err:', rpcError);
           throw rpcError;
@@ -1402,7 +1442,7 @@ export default function App() {
       }
 
       setProfileOpen(false);
-      notify('บันทึกชื่อและรูปโปรไฟล์เรียบร้อย ✨');
+      notify('บันทึกชื่อ รูปโปรไฟล์ และสัตว์เลี้ยงคู่ใจเรียบร้อย ✨');
     });
   }
 
@@ -2343,8 +2383,10 @@ export default function App() {
                     const isMe = m.id === me.id;
                     const petTypeForMember: PetType = isMe
                       ? myPetType
-                      : (m.id === 'may' ? 'cat' : m.id === 'nan' ? 'frog' : m.id === 'kong' ? 'dog' : m.id === 'beam' ? 'hamster' : m.id === 'ploy' ? 'toad' : 'cat');
-                    const petNameForMember = isMe ? myPetName : (m.id === 'may' ? 'น้องส้ม' : m.id === 'nan' ? 'พี่กบ' : m.id === 'kong' ? 'เจ้าม่อน' : m.id === 'beam' ? 'เจ้านิ่ม' : m.id === 'ploy' ? 'กบทอง' : 'สัตว์เลี้ยง');
+                      : (m.pet_type || (m.id === 'may' ? 'cat' : m.id === 'nan' ? 'frog' : m.id === 'kong' ? 'dog' : m.id === 'beam' ? 'hamster' : m.id === 'ploy' ? 'toad' : 'cat'));
+                    const petNameForMember = isMe
+                      ? myPetName
+                      : (m.pet_name || (m.id === 'may' ? 'น้องส้ม' : m.id === 'nan' ? 'พี่กบ' : m.id === 'kong' ? 'เจ้าม่อน' : m.id === 'beam' ? 'เจ้านิ่ม' : m.id === 'ploy' ? 'กบทอง' : 'สัตว์เลี้ยง'));
 
                     return (
                       <div key={m.id} className="doll-occupant-group">
@@ -2380,7 +2422,7 @@ export default function App() {
                             if (isMe) {
                               notify(`ลูบหัว ${myPetName || 'สัตว์เลี้ยง'} แล้ว มีความสุขจัง! 💕`);
                             } else {
-                              notify(`ลูบหัวสัตว์เลี้ยงของ ${m.name} อย่างอ่อนโยน 💕`);
+                              notify(`ลูบหัว ${petNameForMember} ของ ${m.name} อย่างอ่อนโยน 💕`);
                             }
                           }}
                         />
