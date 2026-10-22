@@ -5874,7 +5874,7 @@ export default function App() {
 
       {/* 10. HR LEAVE QUOTA MANAGEMENT MODAL */}
       {manageQuotaModalOpen && (
-        <div className="modal-backdrop" onClick={() => setManageQuotaModalOpen(false)}>
+        <div className="modal-backdrop">
           <div className="modal" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -6046,7 +6046,7 @@ export default function App() {
 
       {/* 12. LINE BOT CONFIGURATION MODAL */}
       {lineBotModalOpen && (
-        <div className="modal-backdrop" onClick={() => setLineBotModalOpen(false)}>
+        <div className="modal-backdrop">
           <div className="modal" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
