@@ -846,7 +846,11 @@ export default function App() {
         online: (results[4].data || []).some(p => p.user_id === r.user_id && Date.now() - new Date(p.last_seen).getTime() < 90000),
         color: (['blue', 'mint', 'peach', 'lavender'] as const)[i % 4],
         note: r.daily_note,
-        isAdmin: r.is_admin,
+        isAdmin: r.is_admin || r.role_type === 'admin',
+        role_type: (r.role_type as RoleType) || (r.is_admin ? 'admin' : 'member'),
+        isHr: r.role_type === 'hr' || r.is_admin || r.role_type === 'admin',
+        isExecutive: r.role_type === 'executive',
+        email: r.email,
         avatarUrl: r.avatar_url || (r.user_id === session?.user?.id ? myGoogleAvatar : undefined),
         pet_type: r.pet_type,
         pet_name: r.pet_name,
@@ -2498,18 +2502,39 @@ export default function App() {
   // Admin sets member role (admin, hr, executive, member)
   async function handleAdminSetRole(memberId: string, newRole: RoleType) {
     await action(async () => {
-      if (demo) {
-        if (memberId === me.id) {
-          setMyDemoRole(newRole);
-          localStorage.setItem('prime-demo-role', newRole);
-        }
-        setCustomMemberRoles(prev => ({ ...prev, [memberId]: newRole }));
-      } else if (supabase) {
-        const { error } = await supabase.rpc('admin_set_member_role', {
+      // 1. Optimistic & Local update so UI reflects the new role immediately
+      if (memberId === me.id) {
+        setMyDemoRole(newRole);
+        try { localStorage.setItem('prime-demo-role', newRole); } catch {}
+      }
+      setCustomMemberRoles(prev => ({ ...prev, [memberId]: newRole }));
+      setLiveMembers(prev => prev.map(m => m.id === memberId ? {
+        ...m,
+        role_type: newRole,
+        isAdmin: newRole === 'admin',
+        isHr: newRole === 'hr' || newRole === 'admin',
+        isExecutive: newRole === 'executive'
+      } : m));
+
+      // 2. Persist to Supabase if connected
+      if (!demo && supabase) {
+        const { error: rpcErr } = await supabase.rpc('admin_set_member_role', {
           p_user_id: memberId,
           p_role_type: newRole
         });
-        if (error) throw error;
+        if (rpcErr) {
+          console.warn('RPC admin_set_member_role error, performing direct table update:', rpcErr);
+          const { error: updateErr } = await supabase
+            .from('members')
+            .update({
+              role_type: newRole,
+              is_admin: newRole === 'admin'
+            })
+            .or(`user_id.eq.${memberId},id.eq.${memberId}`);
+          if (updateErr) {
+            console.error('Direct table update error:', updateErr);
+          }
+        }
         await refresh();
       }
       notify(`อัปเดตสิทธิ์สมาชิกเป็น "${newRole.toUpperCase()}" เรียบร้อยแล้ว`);

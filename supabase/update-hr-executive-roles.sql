@@ -76,7 +76,7 @@ begin
   update public.members
   set role_type = p_role_type,
       is_admin = (p_role_type = 'admin')
-  where user_id = p_user_id;
+  where user_id = p_user_id or id = p_user_id;
 end;
 $$;
 
