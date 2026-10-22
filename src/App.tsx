@@ -634,9 +634,10 @@ export default function App() {
     try { localStorage.setItem('prime-demo-leaves', JSON.stringify(demoLeaves)); } catch { }
   }, [demoLeaves]);
 
-  // Sync companion pet from database auth user metadata so switching devices syncs automatically
+  // Sync companion pet from database auth user metadata on initial login so switching devices syncs automatically
+  const hasSyncedPetRef = useRef(false);
   useEffect(() => {
-    if (demo || !session?.user?.id) return;
+    if (demo || !session?.user?.id || hasSyncedPetRef.current) return;
     const meta = session.user.user_metadata;
     if (meta?.pet_type) {
       setMyPetType(meta.pet_type as PetType);
@@ -648,7 +649,8 @@ export default function App() {
       setEditPetName(meta.pet_name as string);
       try { localStorage.setItem('prime_user_pet_name', meta.pet_name); } catch {}
     }
-  }, [session?.user?.id, session?.user?.user_metadata?.pet_type, session?.user?.user_metadata?.pet_name, demo]);
+    hasSyncedPetRef.current = true;
+  }, [session?.user?.id, demo]);
 
   const refresh = useCallback(async () => {
     if (!supabase || !session || demo) return;
@@ -909,8 +911,8 @@ export default function App() {
   const members: Member[] = useMemo(() => {
     const rawList = demo ? [me, ...sampleMembers] : liveMembers;
     return rawList.map(m => {
-      const isMe = m.id === me.id || (session?.user?.id && m.id === session.user.id);
-      const targetMember = isMe ? { ...m, name: me.name, avatarUrl: me.avatarUrl } : m;
+      const isMe = m.id === me.id || (session?.user?.id && (m.id === session.user.id || m.id === me.id));
+      const targetMember = isMe ? { ...m, name: me.name, avatarUrl: me.avatarUrl, pet_type: myPetType, pet_name: myPetName } : m;
       const activeLeave = activeLeavesToday.find(l => l.user_id === targetMember.id);
       if (activeLeave) {
         return {
@@ -925,7 +927,7 @@ export default function App() {
       }
       return targetMember;
     });
-  }, [demo, liveMembers, me, activeLeavesToday, session?.user?.id]);
+  }, [demo, liveMembers, me, activeLeavesToday, session?.user?.id, myPetType, myPetName]);
 
   const room = rooms.find(r => r.id === selected) || initialRooms[0];
   const online = members.filter(m => m.online);
@@ -1406,7 +1408,7 @@ export default function App() {
       // 2. If connected to Supabase, sync to backend
       if (!demo && supabase && session) {
         try {
-          await supabase.auth.updateUser({
+          const { data: updatedUserData } = await supabase.auth.updateUser({
             data: {
               full_name: trimmed,
               display_name: trimmed,
@@ -1416,29 +1418,37 @@ export default function App() {
               pet_name: chosenPetName
             }
           });
+          if (updatedUserData?.user) {
+            setSession(prev => prev ? { ...prev, user: updatedUserData.user } : null);
+          }
         } catch (err) {
           console.warn('Supabase updateUser err:', err);
         }
 
-        let rpcError = null;
-        // Try calling update_my_identity with 4 params (when add-pet-identity migration is executed)
-        const res4 = await supabase.rpc('update_my_identity', {
-          p_name: trimmed,
-          p_avatar: editAvatar,
-          p_pet_type: chosenPetType,
-          p_pet_name: chosenPetName
-        });
-        if (res4.error) {
-          // Fallback to 2-param signature if database function has not been upgraded yet
-          const res2 = await supabase.rpc('update_my_identity', { p_name: trimmed, p_avatar: editAvatar });
-          rpcError = res2.error;
-        }
-        if (rpcError) {
-          console.error('RPC update_my_identity err:', rpcError);
-          throw rpcError;
+        try {
+          // Try calling update_my_identity with 4 params (when add-pet-identity migration is executed)
+          const res4 = await supabase.rpc('update_my_identity', {
+            p_name: trimmed,
+            p_avatar: editAvatar,
+            p_pet_type: chosenPetType,
+            p_pet_name: chosenPetName
+          });
+          if (res4.error) {
+            // Fallback to 2-param signature if database function has not been upgraded yet
+            const res2 = await supabase.rpc('update_my_identity', { p_name: trimmed, p_avatar: editAvatar });
+            if (res2.error) {
+              console.warn('RPC update_my_identity fallback err:', res2.error);
+            }
+          }
+        } catch (rpcErr) {
+          console.warn('RPC update_my_identity exception:', rpcErr);
         }
 
-        await refresh();
+        try {
+          await refresh();
+        } catch (refreshErr) {
+          console.warn('refresh error:', refreshErr);
+        }
       }
 
       setProfileOpen(false);
@@ -4460,7 +4470,12 @@ export default function App() {
                       type="button"
                       key={pType}
                       className={`pet-select-card ${editPetType === pType ? 'active' : ''}`}
-                      onClick={() => setEditPetType(pType)}
+                      onClick={() => {
+                        setEditPetType(pType);
+                        if (!editPetName || Object.values(PET_CATALOG).some(cat => cat.defaultName === editPetName)) {
+                          setEditPetName(pInfo.defaultName);
+                        }
+                      }}
                       title={pInfo.desc}
                     >
                       <span className="pet-select-emoji">{pInfo.emoji}</span>
