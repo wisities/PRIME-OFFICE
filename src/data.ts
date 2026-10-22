@@ -1,3 +1,5 @@
+import type { PetType } from './CompanionPet';
+
 export type RoomId = 'hub' | 'project' | 'focus' | 'coffee';
 export type Status = 'available' | 'focus' | 'away';
 export type LeaveType = 'sick' | 'personal' | 'vacation' | 'wfh';
@@ -66,7 +68,7 @@ export type Member = {
   isHr?: boolean;
   isExecutive?: boolean;
   avatarUrl?: string;
-  pet_type?: 'cat' | 'dog' | 'hamster' | 'frog' | 'toad';
+  pet_type?: PetType;
   pet_name?: string;
   leaveToday?: { type: LeaveType; label: string; emoji: string };
 };
