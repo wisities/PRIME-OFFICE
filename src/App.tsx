@@ -3281,6 +3281,7 @@ export default function App() {
                     <div className="att-left-col">
                       {/* Executive Leave Acknowledgment Section */}
                       {me.isExecutive && (
+                        <section className="executive-ack-box">
                           <div className="executive-ack-header">
                             <h3><ShieldCheck size={18} color="#2563eb" /> คำขอลางานของเจ้าหน้าที่ (รอผู้บริหารรับทราบ)</h3>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

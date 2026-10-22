@@ -54,6 +54,7 @@ export type LeaveQuota = {
 export type Member = {
   id: string;
   name: string;
+  email?: string;
   role: string;
   role_type?: RoleType;
   room: RoomId;
