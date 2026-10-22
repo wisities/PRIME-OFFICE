@@ -80,6 +80,21 @@ begin
 end;
 $$;
 
+create or replace function public.admin_set_member_role(p_user_id text, p_role_type text, p_email text default null)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.is_office_admin() then raise exception 'admin_only'; end if;
+  if p_role_type not in ('admin', 'hr', 'executive', 'member') then raise exception 'invalid_role'; end if;
+  
+  update public.members
+  set role_type = p_role_type,
+      is_admin = (p_role_type = 'admin')
+  where (user_id::text = p_user_id)
+     or (id::text = p_user_id)
+     or (p_email is not null and lower(email) = lower(trim(p_email)));
+end;
+$$;
+
 -- 7. Function: Executive acknowledges leave
 create or replace function public.executive_acknowledge_leave(p_leave_id uuid)
 returns void language plpgsql security definer set search_path = '' as $$
@@ -135,6 +150,7 @@ end;
 $$;
 
 grant execute on function public.admin_set_member_role(uuid, text) to authenticated;
+grant execute on function public.admin_set_member_role(text, text, text) to authenticated;
 grant execute on function public.executive_acknowledge_leave(uuid) to authenticated;
 grant execute on function public.attach_medical_cert(uuid, text) to authenticated;
 grant execute on function public.hr_upsert_leave_quota(uuid, int, int, int, int, int) to authenticated;

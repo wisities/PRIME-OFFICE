@@ -837,6 +837,11 @@ export default function App() {
 
     setLiveMembers(rows.map((r, i) => {
       const memberLeave = activeLeavesToday.find(l => l.user_id === r.user_id);
+      const customRole = customMemberRoles[r.user_id] ||
+                         customMemberRoles[r.id] ||
+                         (r.email ? customMemberRoles[r.email] : undefined) ||
+                         (r.name ? customMemberRoles[r.name] : undefined);
+      const effectiveRole: RoleType = customRole || (r.role_type as RoleType) || (r.is_admin ? 'admin' : 'member');
       return {
         id: r.user_id || r.id,
         name: r.name,
@@ -846,10 +851,10 @@ export default function App() {
         online: (results[4].data || []).some(p => p.user_id === r.user_id && Date.now() - new Date(p.last_seen).getTime() < 90000),
         color: (['blue', 'mint', 'peach', 'lavender'] as const)[i % 4],
         note: r.daily_note,
-        isAdmin: r.is_admin || r.role_type === 'admin',
-        role_type: (r.role_type as RoleType) || (r.is_admin ? 'admin' : 'member'),
-        isHr: r.role_type === 'hr' || r.is_admin || r.role_type === 'admin',
-        isExecutive: r.role_type === 'executive',
+        isAdmin: effectiveRole === 'admin',
+        role_type: effectiveRole,
+        isHr: effectiveRole === 'hr' || effectiveRole === 'admin',
+        isExecutive: effectiveRole === 'executive',
         email: r.email,
         avatarUrl: r.avatar_url || (r.user_id === session?.user?.id ? myGoogleAvatar : undefined),
         pet_type: r.pet_type,
@@ -952,7 +957,12 @@ export default function App() {
   const effectiveName = customName || (demo ? demoName : (currentLive?.name || session?.user?.user_metadata?.full_name || 'คุณ'));
   const effectiveAvatar = customAvatar || (demo ? demoAvatar : (currentLive?.avatarUrl || userAvatar || ''));
 
-  const meRoleType: RoleType = demo ? myDemoRole : ((currentLive?.role_type as RoleType) || (currentLive?.isAdmin ? 'admin' : 'member'));
+  const meCustomRole = (session?.user?.id ? customMemberRoles[session.user.id] : undefined) ||
+                       (session?.user?.email ? customMemberRoles[session.user.email] : undefined) ||
+                       (currentLive?.id ? customMemberRoles[currentLive.id] : undefined) ||
+                       (currentLive?.email ? customMemberRoles[currentLive.email] : undefined) ||
+                       (demoSessionId ? customMemberRoles[demoSessionId] : undefined);
+  const meRoleType: RoleType = meCustomRole || (demo ? myDemoRole : ((currentLive?.role_type as RoleType) || (currentLive?.isAdmin ? 'admin' : 'member')));
   const meIsAdmin = meRoleType === 'admin';
   const meIsHr = meRoleType === 'hr' || meRoleType === 'admin';
   const meIsExecutive = meRoleType === 'executive';
@@ -1018,7 +1028,12 @@ export default function App() {
     return rawList.map(m => {
       const isMe = m.id === me.id || (session?.user?.id && (m.id === session.user.id || m.id === me.id));
       const targetMember = isMe ? { ...m, name: me.name, avatarUrl: me.avatarUrl, pet_type: myPetType, pet_name: myPetName } : m;
-      const effectiveRoleType: RoleType = isMe ? me.role_type || 'member' : (customMemberRoles[targetMember.id] || targetMember.role_type || (targetMember.isAdmin ? 'admin' : 'member'));
+      const customRole = customMemberRoles[targetMember.id] ||
+                         (targetMember.email ? customMemberRoles[targetMember.email] : undefined) ||
+                         (targetMember.name ? customMemberRoles[targetMember.name] : undefined);
+      const effectiveRoleType: RoleType = isMe 
+        ? (me.role_type || customRole || 'member') 
+        : (customRole || targetMember.role_type || (targetMember.isAdmin ? 'admin' : 'member'));
       const activeLeave = activeLeavesToday.find(l => l.user_id === targetMember.id);
       const memberWithRole: Member = {
         ...targetMember,
@@ -2501,14 +2516,23 @@ export default function App() {
 
   // Admin sets member role (admin, hr, executive, member)
   async function handleAdminSetRole(memberId: string, newRole: RoleType) {
+    const target = members.find(m => m.id === memberId);
     await action(async () => {
       // 1. Optimistic & Local update so UI reflects the new role immediately
-      if (memberId === me.id) {
+      if (memberId === me.id || (session?.user?.id && memberId === session.user.id)) {
         setMyDemoRole(newRole);
         try { localStorage.setItem('prime-demo-role', newRole); } catch {}
       }
-      setCustomMemberRoles(prev => ({ ...prev, [memberId]: newRole }));
-      setLiveMembers(prev => prev.map(m => m.id === memberId ? {
+
+      setCustomMemberRoles(prev => {
+        const next = { ...prev, [memberId]: newRole };
+        if (target?.email) next[target.email] = newRole;
+        if (target?.name) next[target.name] = newRole;
+        if (target?.id) next[target.id] = newRole;
+        return next;
+      });
+
+      setLiveMembers(prev => prev.map(m => (m.id === memberId || (target?.email && m.email === target.email)) ? {
         ...m,
         role_type: newRole,
         isAdmin: newRole === 'admin',
@@ -2518,26 +2542,45 @@ export default function App() {
 
       // 2. Persist to Supabase if connected
       if (!demo && supabase) {
-        const { error: rpcErr } = await supabase.rpc('admin_set_member_role', {
-          p_user_id: memberId,
-          p_role_type: newRole
-        });
-        if (rpcErr) {
-          console.warn('RPC admin_set_member_role error, performing direct table update:', rpcErr);
-          const { error: updateErr } = await supabase
-            .from('members')
-            .update({
-              role_type: newRole,
-              is_admin: newRole === 'admin'
-            })
-            .or(`user_id.eq.${memberId},id.eq.${memberId}`);
-          if (updateErr) {
-            console.error('Direct table update error:', updateErr);
+        let rpcSuccess = false;
+        try {
+          // Attempt 1: Call admin_set_member_role with p_user_id & optional p_email
+          const res1 = await supabase.rpc('admin_set_member_role', {
+            p_user_id: memberId,
+            p_role_type: newRole,
+            ...(target?.email ? { p_email: target.email } : {})
+          });
+          if (!res1.error) {
+            rpcSuccess = true;
+          } else {
+            // Also try 2-param signature if database has the 2-param version
+            const res2 = await supabase.rpc('admin_set_member_role', {
+              p_user_id: memberId,
+              p_role_type: newRole
+            });
+            if (!res2.error) rpcSuccess = true;
+          }
+        } catch (e) {
+          console.warn('RPC admin_set_member_role exception:', e);
+        }
+
+        // Attempt 2: Fallback to existing admin_upsert_member (already in schema.sql) to sync admin status in database
+        if (!rpcSuccess && target && target.email) {
+          try {
+            await supabase.rpc('admin_upsert_member', {
+              p_email: target.email,
+              p_name: target.name,
+              p_active: true,
+              p_admin: newRole === 'admin'
+            });
+          } catch (e) {
+            console.warn('Fallback admin_upsert_member err:', e);
           }
         }
+
         await refresh();
       }
-      notify(`อัปเดตสิทธิ์สมาชิกเป็น "${newRole.toUpperCase()}" เรียบร้อยแล้ว`);
+      notify(`อัปเดตสิทธิ์ "${target?.name || 'สมาชิก'}" เป็น ${newRole === 'admin' ? '👑 Admin' : newRole === 'hr' ? '💼 HR' : newRole === 'executive' ? '👔 ผู้บริหาร' : '👤 สมาชิกทั่วไป'} เรียบร้อยแล้ว ✨`);
     });
   }
 
