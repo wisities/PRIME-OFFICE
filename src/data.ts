@@ -21,6 +21,8 @@ export type ThaiHoliday = {
   isCompanyHoliday: boolean;
 };
 
+export type RoleType = 'admin' | 'hr' | 'executive' | 'member';
+
 export type LeaveRequest = {
   id: string;
   user_id: string;
@@ -30,19 +32,38 @@ export type LeaveRequest = {
   period: 'full' | 'morning' | 'afternoon';
   reason: string;
   status: 'approved' | 'pending' | 'cancelled';
+  medical_cert_url?: string | null;
+  acknowledged_by_executive?: boolean;
+  acknowledged_at?: string | null;
   created_at: string;
+};
+
+export type LeaveQuota = {
+  user_id: string;
+  year: number;
+  sick_total: number;
+  sick_used: number;
+  personal_total: number;
+  personal_used: number;
+  vacation_total: number;
+  vacation_used: number;
+  wfh_total: number;
+  wfh_used: number;
 };
 
 export type Member = {
   id: string;
   name: string;
   role: string;
+  role_type?: RoleType;
   room: RoomId;
   status: Status;
   online: boolean;
   color: string;
   note?: string;
   isAdmin?: boolean;
+  isHr?: boolean;
+  isExecutive?: boolean;
   avatarUrl?: string;
   pet_type?: 'cat' | 'dog' | 'hamster' | 'frog' | 'toad';
   pet_name?: string;
@@ -85,18 +106,19 @@ export const periodLabels: Record<'full' | 'morning' | 'afternoon', string> = {
 };
 
 export const sampleMembers: Member[] = [
-  {id:'may',name:'เมย์',role:'Project Lead',room:'hub',status:'available',online:true,color:'peach',note:'วางแผนงานประจำสัปดาห์'},
-  {id:'ton',name:'ต้น',role:'Developer',room:'hub',status:'focus',online:true,color:'blue',note:'พัฒนาหน้าเว็บไซต์ลูกค้า'},
-  {id:'beam',name:'บีม',role:'Designer',room:'hub',status:'available',online:true,color:'lavender'},
-  {id:'nan',name:'แนน',role:'Consultant',room:'project',status:'available',online:true,color:'mint'},
-  {id:'kong',name:'ก้อง',role:'Developer',room:'project',status:'available',online:true,color:'blue'},
-  {id:'ploy',name:'พลอย',role:'Designer',room:'focus',status:'focus',online:true,color:'peach'},
-  {id:'art',name:'อาร์ต',role:'Developer',room:'focus',status:'focus',online:true,color:'mint'},
-  {id:'nat',name:'นัท',role:'Marketing',room:'coffee',status:'away',online:false,color:'lavender',leaveToday:{type:'sick',label:'ลาป่วย',emoji:'🤒'}},
+  {id:'may',name:'เมย์',role:'Executive Director',role_type:'executive',isExecutive:true,room:'hub',status:'available',online:true,color:'peach',note:'ผู้บริหาร — ยกเว้นการลงเวลา'},
+  {id:'ton',name:'ต้น',role:'HR Officer',role_type:'hr',isHr:true,room:'hub',status:'focus',online:true,color:'blue',note:'ฝ่ายบุคคล จัดการการลาและสิทธิ์'},
+  {id:'beam',name:'บีม',role:'Designer',role_type:'member',room:'hub',status:'available',online:true,color:'lavender'},
+  {id:'nan',name:'แนน',role:'Consultant',role_type:'member',room:'project',status:'available',online:true,color:'mint'},
+  {id:'kong',name:'ก้อง',role:'Developer',role_type:'member',room:'project',status:'available',online:true,color:'blue'},
+  {id:'ploy',name:'พลอย',role:'Designer',role_type:'member',room:'focus',status:'focus',online:true,color:'peach'},
+  {id:'art',name:'อาร์ต',role:'System Admin',role_type:'admin',isAdmin:true,room:'focus',status:'focus',online:true,color:'mint'},
+  {id:'nat',name:'นัท',role:'Marketing',role_type:'member',room:'coffee',status:'away',online:false,color:'lavender',leaveToday:{type:'sick',label:'ลาป่วย',emoji:'🤒'}},
   ...['ฟ้า','ปอนด์','ไอซ์','วิว','ฟิล์ม','พิม'].map((name,i)=>({
     id:'offline-'+i,
     name,
     role:'ทีม PRIME',
+    role_type:'member' as RoleType,
     room:'hub' as RoomId,
     status:'away' as Status,
     online:false,
@@ -111,10 +133,12 @@ export const sampleLeaves: LeaveRequest[] = [
     user_id: 'nat',
     leave_type: 'sick',
     start_date: new Date().toISOString().slice(0, 10),
-    end_date: new Date().toISOString().slice(0, 10),
+    end_date: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10), // ลาป่วย 4 วัน
     period: 'full',
-    reason: 'มีไข้สูง ไปพบแพทย์โรงพยาบาล',
+    reason: 'มีไข้สูง และอาหารเป็นพิษ แพทย์สั่งพักฟื้น 4 วัน',
     status: 'approved',
+    medical_cert_url: null, // รอแนบใบรับรองแพทย์
+    acknowledged_by_executive: false,
     created_at: new Date(Date.now() - 3600000 * 5).toISOString()
   },
   {
@@ -126,8 +150,21 @@ export const sampleLeaves: LeaveRequest[] = [
     period: 'full',
     reason: 'พักผ่อนประจำปีต่างจังหวัด',
     status: 'approved',
+    acknowledged_by_executive: true,
+    acknowledged_at: new Date(Date.now() - 3600000 * 2).toISOString(),
     created_at: new Date(Date.now() - 86400000).toISOString()
   }
+];
+
+export const sampleLeaveQuotas: LeaveQuota[] = [
+  { user_id: 'may', year: new Date().getFullYear(), sick_total: 30, sick_used: 0, personal_total: 7, personal_used: 1, vacation_total: 15, vacation_used: 3, wfh_total: 30, wfh_used: 5 },
+  { user_id: 'ton', year: new Date().getFullYear(), sick_total: 30, sick_used: 1, personal_total: 7, personal_used: 0, vacation_total: 10, vacation_used: 2, wfh_total: 30, wfh_used: 4 },
+  { user_id: 'beam', year: new Date().getFullYear(), sick_total: 30, sick_used: 2, personal_total: 7, personal_used: 1, vacation_total: 10, vacation_used: 4, wfh_total: 30, wfh_used: 6 },
+  { user_id: 'nan', year: new Date().getFullYear(), sick_total: 30, sick_used: 0, personal_total: 7, personal_used: 0, vacation_total: 10, vacation_used: 1, wfh_total: 30, wfh_used: 2 },
+  { user_id: 'kong', year: new Date().getFullYear(), sick_total: 30, sick_used: 1, personal_total: 7, personal_used: 2, vacation_total: 10, vacation_used: 5, wfh_total: 30, wfh_used: 3 },
+  { user_id: 'ploy', year: new Date().getFullYear(), sick_total: 30, sick_used: 0, personal_total: 7, personal_used: 1, vacation_total: 10, vacation_used: 2, wfh_total: 30, wfh_used: 5 },
+  { user_id: 'art', year: new Date().getFullYear(), sick_total: 30, sick_used: 0, personal_total: 7, personal_used: 0, vacation_total: 10, vacation_used: 0, wfh_total: 30, wfh_used: 8 },
+  { user_id: 'nat', year: new Date().getFullYear(), sick_total: 30, sick_used: 4, personal_total: 7, personal_used: 2, vacation_total: 10, vacation_used: 3, wfh_total: 30, wfh_used: 1 }
 ];
 
 export const sampleAttendance: AttendanceRecord[] = [

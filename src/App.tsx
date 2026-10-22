@@ -7,14 +7,15 @@ import {
   Mic, MicOff, Headphones, PhoneOff, Radio, Volume2, VolumeX, CalendarDays, Sparkles,
   Maximize2, Minimize2, Camera, Heart, ThumbsUp, CheckSquare, MessageSquare, Send,
   Zap, AlertTriangle, Calendar, UserCheck, Square, MessageCircle, Lock, Search, ArrowLeft,
-  Image as ImageIcon, Download, Mail, Gamepad2
+  Image as ImageIcon, Download, Mail, Gamepad2, FileSpreadsheet, FileText, CheckCheck, UploadCloud, Eye
 } from 'lucide-react';
 import { configured, supabase } from './backend';
 import {
   rooms as initialRooms, statuses, sampleMembers, sampleAttendance, sampleLeaves,
   leaveTypesConfig, periodLabels, type Room, type RoomId, type Status, type Member,
   type AttendanceRecord, type LeaveRequest, type LeaveType, type ThaiHoliday,
-  type RoomChatMessage, type DirectMessage, sampleRoomMessages, sampleDirectMessages
+  type RoomChatMessage, type DirectMessage, sampleRoomMessages, sampleDirectMessages,
+  type RoleType, type LeaveQuota, sampleLeaveQuotas
 } from './data';
 import {
   loadDemo, validMeetUrl, normalizeEmail, checkAttendanceStatus, formatThaiTime,
@@ -28,6 +29,7 @@ import { CompanionPet, type PetType, PET_CATALOG } from './CompanionPet';
 import { ArcadeModal } from './ArcadeModal';
 import { GoKartTrack } from './GoKartTrack';
 import { ConferenceModal } from './ConferenceModal';
+import { sendLineBotPush, openLineShare, getLineSettings, saveLineSettings } from './lineBot';
 
 export interface TaskAssignee {
   id: string;
@@ -367,6 +369,13 @@ export default function App() {
   const conferenceClientRef = useRef<VideoConferenceClient | null>(null);
   const myRoomRef = useRef<RoomId>('hub');
 
+  // Active Conference Tracking across rooms
+  const [activeConferenceRooms, setActiveConferenceRooms] = useState<Record<string, { count: number; title: string }>>({
+    project: { count: 2, title: 'ประชุมประจำสัปดาห์ Project Sprint Review' }
+  });
+  const [roomMeetingDecision, setRoomMeetingDecision] = useState<RoomId | null>(null);
+  const [incomingMeetingCall, setIncomingMeetingCall] = useState<{ roomId: RoomId; title: string; senderName: string } | null>(null);
+
   const triggerUrgentFlash = useCallback((broadcast: UrgentBroadcast) => {
     // CRITICAL FOCUS ZONE ISOLATION: Never show popup to anyone in Focus Zone
     if (myRoomRef.current === 'focus') {
@@ -588,6 +597,52 @@ export default function App() {
   const [liveAttendance, setLiveAttendance] = useState<AttendanceRecord[]>([]);
   const [liveLeaves, setLiveLeaves] = useState<LeaveRequest[]>([]);
   const [teamFilter, setTeamFilter] = useState<'all' | 'present' | 'late' | 'leave' | 'not_in'>('all');
+
+  // Demo Role state (can be switched between admin, hr, executive, member for instant preview)
+  const [myDemoRole, setMyDemoRole] = useState<RoleType>(() => {
+    return (localStorage.getItem('prime-demo-role') as RoleType) || 'admin';
+  });
+
+  // Annual Leave Quotas State
+  const [leaveQuotas, setLeaveQuotas] = useState<LeaveQuota[]>(() => {
+    try {
+      const saved = localStorage.getItem('prime-leave-quotas');
+      return saved ? JSON.parse(saved) : sampleLeaveQuotas;
+    } catch {
+      return sampleLeaveQuotas;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('prime-leave-quotas', JSON.stringify(leaveQuotas));
+    } catch {}
+  }, [leaveQuotas]);
+
+  // HR Quota Management Modal & Medical Cert Upload State
+  const [manageQuotaModalOpen, setManageQuotaModalOpen] = useState(false);
+  const [editingQuotaUser, setEditingQuotaUser] = useState<string | null>(null);
+  const [quotaFormValues, setQuotaFormValues] = useState<{ sick: number; personal: number; vacation: number; wfh: number }>({ sick: 30, personal: 7, vacation: 10, wfh: 30 });
+  const [activeCertViewModal, setActiveCertViewModal] = useState<string | null>(null);
+  const [uploadingCertForLeaveId, setUploadingCertForLeaveId] = useState<string | null>(null);
+  const medCertInputRef = useRef<HTMLInputElement>(null);
+  const [lineBotModalOpen, setLineBotModalOpen] = useState(false);
+  const [lineBotFormValues, setLineBotFormValues] = useState(() => getLineSettings());
+
+  const [customMemberRoles, setCustomMemberRoles] = useState<Record<string, RoleType>>(() => {
+    try {
+      const saved = localStorage.getItem('prime-custom-roles');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('prime-custom-roles', JSON.stringify(customMemberRoles));
+    } catch {}
+  }, [customMemberRoles]);
 
   // Leave Form State
   const [leaveType, setLeaveType] = useState<LeaveType>('sick');
@@ -893,11 +948,57 @@ export default function App() {
   const effectiveName = customName || (demo ? demoName : (currentLive?.name || session?.user?.user_metadata?.full_name || 'คุณ'));
   const effectiveAvatar = customAvatar || (demo ? demoAvatar : (currentLive?.avatarUrl || userAvatar || ''));
 
+  const meRoleType: RoleType = demo ? myDemoRole : ((currentLive?.role_type as RoleType) || (currentLive?.isAdmin ? 'admin' : 'member'));
+  const meIsAdmin = meRoleType === 'admin';
+  const meIsHr = meRoleType === 'hr' || meRoleType === 'admin';
+  const meIsExecutive = meRoleType === 'executive';
+
   const me: Member = demo
-    ? { id: demoSessionId, name: effectiveName, role: 'ทีม PRIME', room: demoState.room as RoomId, status: demoState.status as Status, online: true, color: 'blue', note: demoState.note, isAdmin: true, avatarUrl: effectiveAvatar, pet_type: myPetType, pet_name: myPetName }
+    ? { 
+        id: demoSessionId, 
+        name: effectiveName, 
+        role: meIsExecutive ? 'Executive Director' : meIsHr ? 'HR Officer' : meIsAdmin ? 'System Admin' : 'ทีม PRIME', 
+        role_type: meRoleType,
+        room: demoState.room as RoomId, 
+        status: demoState.status as Status, 
+        online: true, 
+        color: 'blue', 
+        note: demoState.note, 
+        isAdmin: meIsAdmin,
+        isHr: meIsHr,
+        isExecutive: meIsExecutive,
+        avatarUrl: effectiveAvatar, 
+        pet_type: myPetType, 
+        pet_name: myPetName 
+      }
     : (currentLive
-      ? { ...currentLive, name: effectiveName, avatarUrl: effectiveAvatar, pet_type: myPetType, pet_name: myPetName }
-      : { id: session?.user?.id || '', name: effectiveName, role: 'ทีม PRIME', room: 'hub', status: 'available', online: false, color: 'blue', avatarUrl: effectiveAvatar, pet_type: myPetType, pet_name: myPetName });
+      ? { 
+          ...currentLive, 
+          role_type: meRoleType,
+          isAdmin: meIsAdmin,
+          isHr: meIsHr,
+          isExecutive: meIsExecutive,
+          name: effectiveName, 
+          avatarUrl: effectiveAvatar, 
+          pet_type: myPetType, 
+          pet_name: myPetName 
+        }
+      : { 
+          id: session?.user?.id || '', 
+          name: effectiveName, 
+          role: 'ทีม PRIME', 
+          role_type: 'member',
+          isAdmin: false,
+          isHr: false,
+          isExecutive: false,
+          room: 'hub', 
+          status: 'available', 
+          online: false, 
+          color: 'blue', 
+          avatarUrl: effectiveAvatar, 
+          pet_type: myPetType, 
+          pet_name: myPetName 
+        });
 
   // Effective Attendance & Leaves data
   const attendanceList = demo ? demoAttendance : liveAttendance;
@@ -913,10 +1014,19 @@ export default function App() {
     return rawList.map(m => {
       const isMe = m.id === me.id || (session?.user?.id && (m.id === session.user.id || m.id === me.id));
       const targetMember = isMe ? { ...m, name: me.name, avatarUrl: me.avatarUrl, pet_type: myPetType, pet_name: myPetName } : m;
+      const effectiveRoleType: RoleType = isMe ? me.role_type || 'member' : (customMemberRoles[targetMember.id] || targetMember.role_type || (targetMember.isAdmin ? 'admin' : 'member'));
       const activeLeave = activeLeavesToday.find(l => l.user_id === targetMember.id);
+      const memberWithRole: Member = {
+        ...targetMember,
+        role_type: effectiveRoleType,
+        isAdmin: effectiveRoleType === 'admin',
+        isHr: effectiveRoleType === 'hr' || effectiveRoleType === 'admin',
+        isExecutive: effectiveRoleType === 'executive'
+      };
+
       if (activeLeave) {
         return {
-          ...targetMember,
+          ...memberWithRole,
           status: 'away' as Status,
           leaveToday: {
             type: activeLeave.leave_type,
@@ -925,9 +1035,9 @@ export default function App() {
           }
         };
       }
-      return targetMember;
+      return memberWithRole;
     });
-  }, [demo, liveMembers, me, activeLeavesToday, session?.user?.id, myPetType, myPetName]);
+  }, [demo, liveMembers, me, activeLeavesToday, session?.user?.id, myPetType, myPetName, customMemberRoles]);
 
   const room = rooms.find(r => r.id === selected) || initialRooms[0];
   const online = members.filter(m => m.online);
@@ -2218,6 +2328,194 @@ export default function App() {
     });
   }
 
+  // Executive Acknowledges Leave
+  async function handleAcknowledgeLeave(leaveId: string) {
+    await action(async () => {
+      if (demo) {
+        setDemoLeaves(prev => prev.map(l => l.id === leaveId ? { ...l, acknowledged_by_executive: true, acknowledged_at: new Date().toISOString() } : l));
+      } else if (supabase) {
+        const { error } = await supabase.rpc('executive_acknowledge_leave', { p_leave_id: leaveId });
+        if (error) throw error;
+        await refresh();
+      }
+      notify('ผู้บริหารรับทราบคำขอลางานนี้เรียบร้อยแล้ว ✓');
+    });
+  }
+
+  // Send Leave Alert to LINE Bot & LINE Group
+  async function handleSendLineLeaveAlert(leave: LeaveRequest) {
+    const targetMember = members.find(m => m.id === leave.user_id) || { name: 'เจ้าหน้าที่' };
+    const cfg = leaveTypesConfig[leave.leave_type];
+    const text = `📋 [แจ้งเตือนการลาพนักงาน - PRIME VIRTUAL OFFICE]\n\n👤 พนักงาน: ${targetMember.name}\n📝 ประเภท: ${cfg?.emoji || ''} ${cfg?.label || leave.leave_type}\n📅 วันที่: ${leave.start_date === leave.end_date ? leave.start_date : `${leave.start_date} ถึง ${leave.end_date}`}\n🕒 ช่วงเวลา: ${periodLabels[leave.period] || leave.period}\n💬 เหตุผล: ${leave.reason || '—'}\n\n👔 ผู้บริหารได้รับทราบการลาแล้วในระบบ PRIME Teamwork`;
+
+    try {
+      const result = await sendLineBotPush({ text });
+      notify(result.message);
+    } catch (err) {
+      console.warn('LINE Bot alert error:', err);
+      openLineShare(text);
+      notify('เปิดแอป LINE เพื่อแชร์ข้อความแจ้งเตือนเรียบร้อยแล้ว');
+    }
+  }
+
+  // Upload Medical Certificate retroactively (for sick leaves > 3 days)
+  async function handleUploadMedicalCert(leaveId: string, file: File) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const certUrl = reader.result as string;
+      await action(async () => {
+        if (demo) {
+          setDemoLeaves(prev => prev.map(l => l.id === leaveId ? { ...l, medical_cert_url: certUrl } : l));
+        } else if (supabase) {
+          const { error } = await supabase.rpc('attach_medical_cert', { p_leave_id: leaveId, p_cert_url: certUrl });
+          if (error) throw error;
+          await refresh();
+        }
+        notify('แนบใบรับรองแพทย์ย้อนหลังเรียบร้อยแล้ว ✅');
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // Export Attendance & Leaves CSV (For HR & Admin)
+  function handleExportAttendanceCsv() {
+    const headers = [
+      'รหัสพนักงาน (ID)',
+      'ชื่อ-นามสกุล',
+      'ตำแหน่ง',
+      'วันที่ (Date)',
+      'เวลาเข้างาน (Check-in)',
+      'เวลาออกงาน (Check-out)',
+      'สถานะการลงเวลา (Status)',
+      'การลาในวันนี้ (Leave Type)',
+      'เหตุผลการลา (Leave Reason)',
+      'แนบใบรับรองแพทย์ (Medical Cert)'
+    ];
+
+    const rows: string[][] = [];
+
+    // Loop through all members and their attendance/leaves
+    members.forEach(m => {
+      const myLogs = attendanceList.filter(a => a.user_id === m.id);
+      const myLeaves = leavesList.filter(l => l.user_id === m.id);
+
+      if (myLogs.length === 0 && myLeaves.length === 0) {
+        rows.push([
+          m.id,
+          m.name,
+          m.role,
+          todayDateStr,
+          '—',
+          '—',
+          m.isExecutive ? 'ผู้บริหาร (ยกเว้นลงเวลา)' : 'ยังไม่เคยเช็คอิน',
+          '—',
+          '—',
+          '—'
+        ]);
+      } else {
+        myLogs.forEach(att => {
+          const matchedLeave = myLeaves.find(l => l.start_date <= att.work_date && l.end_date >= att.work_date);
+          rows.push([
+            m.id,
+            m.name,
+            m.role,
+            att.work_date,
+            att.check_in_at ? formatThaiTime(att.check_in_at) : '—',
+            att.check_out_at ? formatThaiTime(att.check_out_at) : '—',
+            m.isExecutive ? 'ผู้บริหาร (ยกเว้นลงเวลา)' : (att.status === 'on_time' ? 'ตรงเวลา' : 'มาสาย'),
+            matchedLeave ? leaveTypesConfig[matchedLeave.leave_type]?.label || matchedLeave.leave_type : '—',
+            matchedLeave?.reason || '—',
+            matchedLeave?.medical_cert_url ? 'แนบแล้ว' : '—'
+          ]);
+        });
+      }
+    });
+
+    // Format as CSV with UTF-8 BOM for Thai language Excel support
+    const csvContent = '\uFEFF' + [
+      headers.join(','),
+      ...rows.map(r => r.map(field => `"${(field || '').replace(/"/g, '""')}"`).join(','))
+    ].join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `PRIME_Attendance_Leave_Report_${todayDateStr}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    notify('ส่งออกรายงานสรุปการลงเวลา & ขาดลามาสาย CSV เรียบร้อยแล้ว 📊');
+  }
+
+  // Update Leave Quota (HR function)
+  async function handleUpdateLeaveQuota(userId: string, values: { sick: number; personal: number; vacation: number; wfh: number }) {
+    await action(async () => {
+      const year = new Date().getFullYear();
+      if (demo) {
+        setLeaveQuotas(prev => {
+          const exists = prev.some(q => q.user_id === userId && q.year === year);
+          if (exists) {
+            return prev.map(q => q.user_id === userId && q.year === year ? {
+              ...q,
+              sick_total: values.sick,
+              personal_total: values.personal,
+              vacation_total: values.vacation,
+              wfh_total: values.wfh
+            } : q);
+          } else {
+            return [...prev, {
+              user_id: userId,
+              year,
+              sick_total: values.sick,
+              sick_used: 0,
+              personal_total: values.personal,
+              personal_used: 0,
+              vacation_total: values.vacation,
+              vacation_used: 0,
+              wfh_total: values.wfh,
+              wfh_used: 0
+            }];
+          }
+        });
+      } else if (supabase) {
+        const { error } = await supabase.rpc('hr_upsert_leave_quota', {
+          p_user_id: userId,
+          p_year: year,
+          p_sick: values.sick,
+          p_personal: values.personal,
+          p_vacation: values.vacation,
+          p_wfh: values.wfh
+        });
+        if (error) throw error;
+        await refresh();
+      }
+      setManageQuotaModalOpen(false);
+      notify('บันทึกโควตาวันลาประจำปีเรียบร้อยแล้ว!');
+    });
+  }
+
+  // Admin sets member role (admin, hr, executive, member)
+  async function handleAdminSetRole(memberId: string, newRole: RoleType) {
+    await action(async () => {
+      if (demo) {
+        if (memberId === me.id) {
+          setMyDemoRole(newRole);
+          localStorage.setItem('prime-demo-role', newRole);
+        }
+        setCustomMemberRoles(prev => ({ ...prev, [memberId]: newRole }));
+      } else if (supabase) {
+        const { error } = await supabase.rpc('admin_set_member_role', {
+          p_user_id: memberId,
+          p_role_type: newRole
+        });
+        if (error) throw error;
+        await refresh();
+      }
+      notify(`อัปเดตสิทธิ์สมาชิกเป็น "${newRole.toUpperCase()}" เรียบร้อยแล้ว`);
+    });
+  }
+
   async function sendKnock() {
     if (!knockTarget) return;
     if (knockTarget.room === 'focus') {
@@ -2375,6 +2673,19 @@ export default function App() {
             const isSelected = selected === r.id;
             return (
               <div className={`immersive-map-room ${r.id}`} key={r.id}>
+                {activeConferenceRooms[r.id] && (
+                  <div
+                    className="room-live-conf-tag map-tag"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelected(r.id);
+                      setSelectedRoomCard(r.id);
+                    }}
+                    title={`ห้องนี้กำลังประชุมวิดีโอคอล ${activeConferenceRooms[r.id].count} คน (คลิกเพื่อดูห้อง)`}
+                  >
+                    <span className="live-pulsing-dot" /> LIVE {activeConferenceRooms[r.id].count} คน
+                  </div>
+                )}
                 <button
                   type="button"
                   className={`room-pin-pill ${isMyRoom ? 'my-current-room' : ''} ${isSelected ? 'selected' : ''}`}
@@ -2463,9 +2774,58 @@ export default function App() {
             return (
               <>
                 <div className="room-popover-header">
-                  <strong>{activeR.name}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <strong>{activeR.name}</strong>
+                    {activeConferenceRooms[activeR.id] && (
+                      <span className="room-live-conf-tag">
+                        <span className="pulse-dot" /> LIVE ประชุม ({activeConferenceRooms[activeR.id].count} คน)
+                      </span>
+                    )}
+                  </div>
                   <button className="icon-button" onClick={() => setSelectedRoomCard(null)} title="ปิด"><X size={15} /></button>
                 </div>
+
+                {/* If meeting is currently live in this room, show decision banner */}
+                {activeConferenceRooms[activeR.id] && (
+                  <div className="room-meeting-decision-banner">
+                    <div className="meeting-decision-title">
+                      <Video size={16} color="#2563eb" />
+                      <span>ห้องนี้กำลังมีการประชุมวิดีโออยู่</span>
+                    </div>
+                    <p className="meeting-decision-desc">
+                      หัวข้อ: <strong>{activeConferenceRooms[activeR.id].title}</strong> ({activeConferenceRooms[activeR.id].count} คนในสาย)
+                      <br />คุณสามารถตัดสินใจเข้าร่วมประชุมทันที หรือ นั่งทำงานในห้องเงียบๆ ได้
+                    </p>
+                    <div className="meeting-decision-actions">
+                      <button 
+                        type="button" 
+                        className="meeting-decision-btn join"
+                        onClick={() => {
+                          setSelectedRoomCard(null);
+                          if (me.room !== activeR.id) {
+                            void handleMoveRoomWithWalk(activeR.id);
+                          }
+                          void startConference(activeR.id);
+                        }}
+                      >
+                        <Video size={14} /> เข้าร่วมประชุมทันที
+                      </button>
+                      <button 
+                        type="button" 
+                        className="meeting-decision-btn silent"
+                        onClick={() => {
+                          if (me.room !== activeR.id) {
+                            void handleMoveRoomWithWalk(activeR.id);
+                          }
+                          setSelectedRoomCard(null);
+                          notify(`คุณอยู่ในห้อง ${activeR.name} (โหมดทำงานเงียบ ไม่เปิดกล้อง/ไมค์) 🤫`);
+                        }}
+                      >
+                        ทำงานในห้องเงียบๆ
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <p className="room-popover-desc">{activeR.description}</p>
                 <div className="section-label">
                   <span>สมาชิกในห้อง</span>
@@ -2565,7 +2925,12 @@ export default function App() {
         <div className="island-divider" />
 
         {/* Quick Check-in pill */}
-        {todayMyAttendance ? (
+        {me.isExecutive ? (
+          <div className="topbar-checkin-pill completed" title="ตำแหน่งผู้บริหาร ได้รับการยกเว้นการลงเวลาเข้า-ออกงาน">
+            <ShieldCheck size={13} color="#2563eb" />
+            <span>ผู้บริหาร (ยกเว้นลงเวลา)</span>
+          </div>
+        ) : todayMyAttendance ? (
           !todayMyAttendance.check_out_at ? (
             <button className="topbar-checkin-pill active" onClick={handleCheckOut} disabled={busy} title="คลิกเพื่อเช็คเอาท์เลิกงาน">
               <span className="tiny-dot" />
@@ -2914,6 +3279,78 @@ export default function App() {
                   <div className="att-layout-grid">
                     {/* Left Column: My Action & Leave Submission */}
                     <div className="att-left-col">
+                      {/* Executive Leave Acknowledgment Section */}
+                      {me.isExecutive && (
+                          <div className="executive-ack-header">
+                            <h3><ShieldCheck size={18} color="#2563eb" /> คำขอลางานของเจ้าหน้าที่ (รอผู้บริหารรับทราบ)</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button
+                                type="button"
+                                className="text-button"
+                                style={{ fontSize: '11px', color: '#06C755', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 6px', fontWeight: 600 }}
+                                onClick={() => setLineBotModalOpen(true)}
+                                title="ตั้งค่า LINE Bot Token และ Group ID"
+                              >
+                                <Settings size={12} /> ตั้งค่า LINE Bot
+                              </button>
+                              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+                                {leavesList.filter(l => !l.acknowledged_by_executive && l.status === 'approved').length} รายการ
+                              </span>
+                            </div>
+                          </div>
+                          {leavesList.filter(l => !l.acknowledged_by_executive && l.status === 'approved').length === 0 ? (
+                            <p style={{ margin: 0, fontSize: '12px', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <CheckCircle2 size={16} /> รับทราบการลาของเจ้าหน้าที่ครบทุกรายการแล้ว
+                            </p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {leavesList.filter(l => !l.acknowledged_by_executive && l.status === 'approved').map(l => {
+                                const targetM = members.find(m => m.id === l.user_id) || { name: 'เจ้าหน้าที่' };
+                                const cfg = leaveTypesConfig[l.leave_type];
+                                return (
+                                  <div key={l.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'white', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                    <div>
+                                      <strong style={{ fontSize: '13px' }}>{targetM.name}</strong>
+                                      <span style={{ marginLeft: '6px', fontSize: '12px' }}>{cfg?.emoji} {cfg?.label} ({l.start_date === l.end_date ? l.start_date : `${l.start_date} ถึง ${l.end_date}`})</span>
+                                      {l.reason && <small style={{ display: 'block', color: '#64748b' }}>{l.reason}</small>}
+                                      {l.medical_cert_url && (
+                                        <button 
+                                          type="button" 
+                                          className="med-cert-badge uploaded" 
+                                          style={{ border: 'none', marginTop: '4px' }}
+                                          onClick={() => setActiveCertViewModal(l.medical_cert_url!)}
+                                        >
+                                          <Eye size={12} /> แนบใบรับรองแพทย์แล้ว (คลิกดู)
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                      <button 
+                                        type="button" 
+                                        className="ack-btn"
+                                        onClick={() => void handleAcknowledgeLeave(l.id)}
+                                        title="รับทราบการลานี้"
+                                      >
+                                        <Check size={13} /> รับทราบ
+                                      </button>
+                                      <button 
+                                        type="button" 
+                                        className="secondary"
+                                        style={{ fontSize: '11px', padding: '4px 8px', background: '#e8f9ed', color: '#06C755', borderColor: '#a7f3d0' }}
+                                        onClick={() => void handleSendLineLeaveAlert(l)}
+                                        title="ส่งแจ้งเตือนการลาเข้า LINE Bot / กลุ่ม LINE"
+                                      >
+                                        <MessageSquare size={12} /> ส่ง LINE
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </section>
+                      )}
+
                       {/* My Attendance Card */}
                       <section className="panel att-box">
                         <div className="att-box-header">
@@ -2927,50 +3364,64 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="my-att-summary-card">
-                          <div className="att-time-cell">
-                            <small>เวลาเข้างาน</small>
-                            <strong>{todayMyAttendance ? formatThaiTime(todayMyAttendance.check_in_at) : '—'}</strong>
-                            {todayMyAttendance && (
-                              <span className={`status-tag ${todayMyAttendance.status}`}>
-                                {todayMyAttendance.status === 'on_time' ? '✓ ตรงเวลา' : '⚠ มาสาย'}
-                              </span>
-                            )}
-                          </div>
-                          <div className="att-time-divider" />
-                          <div className="att-time-cell">
-                            <small>เวลาออกงาน</small>
-                            <strong>{todayMyAttendance?.check_out_at ? formatThaiTime(todayMyAttendance.check_out_at) : '—'}</strong>
-                            {todayMyAttendance?.check_out_at ? (
-                              <span className="status-tag finished">✓ บันทึกแล้ว</span>
-                            ) : (
-                              <span className="status-tag in-progress">กำลังทำงาน</span>
-                            )}
-                          </div>
-                          <div className="att-time-divider" />
-                          <div className="att-time-cell">
-                            <small>รวมเวลาทำงาน</small>
-                            <strong>{todayMyAttendance ? formatDuration(todayMyAttendance.check_in_at, todayMyAttendance.check_out_at) : '—'}</strong>
-                            <span className="sub-hint">เป้าหมาย 8 ชม.</span>
-                          </div>
-                        </div>
-
-                        <div className="att-actions-row">
-                          {!todayMyAttendance ? (
-                            <button className="primary att-btn-lg" onClick={handleCheckIn} disabled={busy}>
-                              <Clock size={18} />เช็คอินเข้างาน (เริ่ม 09:00 น.)
-                            </button>
-                          ) : !todayMyAttendance.check_out_at ? (
-                            <button className="primary att-btn-lg checkout" onClick={handleCheckOut} disabled={busy}>
-                              <CheckCircle2 size={18} />เช็คเอาท์เลิกงาน (17:00 น.)
-                            </button>
-                          ) : (
-                            <div className="att-done-banner">
-                              <CheckCircle2 size={18} color="#2b7a5a" />
-                              <span>คุณลงเวลาเข้าและออกงานของวันนี้เรียบร้อยแล้ว พักผ่อนให้เต็มที่ครับ!</span>
+                        {me.isExecutive ? (
+                          <div style={{ padding: '20px', background: 'linear-gradient(135deg, #eff6ff, #f8fafc)', borderRadius: '14px', border: '1.5px solid #bfdbfe', marginTop: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1e40af', fontWeight: 700, fontSize: '14px' }}>
+                              <ShieldCheck size={20} color="#2563eb" />
+                              <span>สถานะ: บัญชีผู้บริหารระดับสูง (Executive)</span>
                             </div>
-                          )}
-                        </div>
+                            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#475569', lineHeight: 1.5 }}>
+                              คุณได้รับการยกเว้นการบันทึกเวลาเข้า-ออกงาน ไม่นับเป็นขาดหรือสาย สามารถเข้าใช้งานระบบเพื่อติดตามภาพรวมการทำงานและรับทราบคำขอลางานของเจ้าหน้าที่ได้ตลอดเวลา
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="my-att-summary-card">
+                              <div className="att-time-cell">
+                                <small>เวลาเข้างาน</small>
+                                <strong>{todayMyAttendance ? formatThaiTime(todayMyAttendance.check_in_at) : '—'}</strong>
+                                {todayMyAttendance && (
+                                  <span className={`status-tag ${todayMyAttendance.status}`}>
+                                    {todayMyAttendance.status === 'on_time' ? '✓ ตรงเวลา' : '⚠ มาสาย'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="att-time-divider" />
+                              <div className="att-time-cell">
+                                <small>เวลาออกงาน</small>
+                                <strong>{todayMyAttendance?.check_out_at ? formatThaiTime(todayMyAttendance.check_out_at) : '—'}</strong>
+                                {todayMyAttendance?.check_out_at ? (
+                                  <span className="status-tag finished">✓ บันทึกแล้ว</span>
+                                ) : (
+                                  <span className="status-tag in-progress">กำลังทำงาน</span>
+                                )}
+                              </div>
+                              <div className="att-time-divider" />
+                              <div className="att-time-cell">
+                                <small>รวมเวลาทำงาน</small>
+                                <strong>{todayMyAttendance ? formatDuration(todayMyAttendance.check_in_at, todayMyAttendance.check_out_at) : '—'}</strong>
+                                <span className="sub-hint">เป้าหมาย 8 ชม.</span>
+                              </div>
+                            </div>
+
+                            <div className="att-actions-row">
+                              {!todayMyAttendance ? (
+                                <button className="primary att-btn-lg" onClick={handleCheckIn} disabled={busy}>
+                                  <Clock size={18} />เช็คอินเข้างาน (เริ่ม 09:00 น.)
+                                </button>
+                              ) : !todayMyAttendance.check_out_at ? (
+                                <button className="primary att-btn-lg checkout" onClick={handleCheckOut} disabled={busy}>
+                                  <CheckCircle2 size={18} />เช็คเอาท์เลิกงาน (17:00 น.)
+                                </button>
+                              ) : (
+                                <div className="att-done-banner">
+                                  <CheckCircle2 size={18} color="#2b7a5a" />
+                                  <span>คุณลงเวลาเข้าและออกงานของวันนี้เรียบร้อยแล้ว พักผ่อนให้เต็มที่ครับ!</span>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </section>
 
                       {/* Leave Request Form (Instant Approval Mode 1) */}
@@ -3076,10 +3527,34 @@ export default function App() {
                             )}
                           </div>
 
+                          {leaveType === 'sick' && leaveWorkingDaysCalc.totalDays > 3 && (
+                            <div style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e', padding: '10px 14px', borderRadius: '10px', fontSize: '12px', marginTop: '10px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                              <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                              <div>
+                                <strong>ข้อบังคับการลาป่วย:</strong> กรณีลาป่วยติดต่อกันเกิน 3 วัน ต้องแนบใบรับรองแพทย์จากสถานพยาบาล (หลังจากกลับมาทำงานแล้วสามารถเข้ามาแนบเอกสารย้อนหลังได้)
+                              </div>
+                            </div>
+                          )}
+
                           <button type="submit" className="primary" disabled={busy}>
                             <Plus size={16} />ยื่นการลา (มีผลทันที)
                           </button>
                         </form>
+
+                        {/* Hidden input for medical certificate upload */}
+                        <input 
+                          type="file" 
+                          ref={medCertInputRef} 
+                          style={{ display: 'none' }} 
+                          accept="image/*,application/pdf"
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file && uploadingCertForLeaveId) {
+                              void handleUploadMedicalCert(uploadingCertForLeaveId, file);
+                            }
+                            if (e.target) e.target.value = '';
+                          }}
+                        />
 
                         {/* My Recent Leaves */}
                         <div className="my-leaves-history">
@@ -3091,25 +3566,59 @@ export default function App() {
                             {leavesList.filter(l => l.user_id === me.id).length === 0 ? (
                               <p className="empty-inline">ยังไม่มีประวัติการลา</p>
                             ) : leavesList.filter(l => l.user_id === me.id).map(l => (
-                              <div key={l.id} className="leave-item-row">
-                                <span className="leave-item-icon">{leaveTypesConfig[l.leave_type]?.emoji || '📋'}</span>
-                                <div className="leave-item-body">
-                                  <strong>
-                                    {leaveTypesConfig[l.leave_type]?.label}
-                                    <span className="period-tag">{periodLabels[l.period] || l.period}</span>
-                                  </strong>
-                                  <small>
-                                    {l.start_date === l.end_date ? l.start_date : `${l.start_date} ถึง ${l.end_date}`}
-                                    {l.reason ? ` · ${l.reason}` : ''}
-                                  </small>
+                              <div key={l.id} className="leave-item-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span className="leave-item-icon">{leaveTypesConfig[l.leave_type]?.emoji || '📋'}</span>
+                                    <div className="leave-item-body">
+                                      <strong>
+                                        {leaveTypesConfig[l.leave_type]?.label}
+                                        <span className="period-tag">{periodLabels[l.period] || l.period}</span>
+                                      </strong>
+                                      <small>
+                                        {l.start_date === l.end_date ? l.start_date : `${l.start_date} ถึง ${l.end_date}`}
+                                        {l.reason ? ` · ${l.reason}` : ''}
+                                      </small>
+                                    </div>
+                                  </div>
+                                  <button
+                                    className="icon-button"
+                                    title="ยกเลิกการลา"
+                                    onClick={() => void handleCancelLeave(l.id)}
+                                  >
+                                    <Trash2 size={15} color="#9aa7ae" />
+                                  </button>
                                 </div>
-                                <button
-                                  className="icon-button"
-                                  title="ยกเลิกการลา"
-                                  onClick={() => void handleCancelLeave(l.id)}
-                                >
-                                  <Trash2 size={15} color="#9aa7ae" />
-                                </button>
+
+                                {/* Medical cert and Executive ack status row */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: '32px', flexWrap: 'wrap', gap: '6px' }}>
+                                  <div>
+                                    {l.medical_cert_url ? (
+                                      <button 
+                                        type="button" 
+                                        className="med-cert-badge uploaded" 
+                                        style={{ border: 'none' }}
+                                        onClick={() => setActiveCertViewModal(l.medical_cert_url!)}
+                                      >
+                                        <Eye size={12} /> แนบใบรับรองแพทย์แล้ว (คลิกดูภาพ)
+                                      </button>
+                                    ) : (
+                                      <button 
+                                        type="button" 
+                                        className="med-cert-upload-btn"
+                                        onClick={() => {
+                                          setUploadingCertForLeaveId(l.id);
+                                          medCertInputRef.current?.click();
+                                        }}
+                                      >
+                                        <UploadCloud size={12} /> แนบใบรับรองแพทย์ย้อนหลัง
+                                      </button>
+                                    )}
+                                  </div>
+                                  <span style={{ fontSize: '11px', color: l.acknowledged_by_executive ? '#059669' : '#94a3b8', fontWeight: 600 }}>
+                                    {l.acknowledged_by_executive ? '✓ ผู้บริหารรับทราบแล้ว' : '○ รอผู้บริหารรับทราบ'}
+                                  </span>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -3125,6 +3634,31 @@ export default function App() {
                             <h2><Users size={20} />สถานะการเข้างานของทีมวันนี้</h2>
                             <p>ประจำวัน {new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
                           </div>
+                          {(me.isHr || me.isAdmin) && (
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              <button 
+                                type="button" 
+                                className="secondary" 
+                                style={{ fontSize: '12px', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                onClick={handleExportAttendanceCsv}
+                                title="ดาวน์โหลดไฟล์ CSV สรุปเวลาเข้า-ออกงาน ขาด ลา มาสาย"
+                              >
+                                <Download size={14} /> ดาวน์โหลด CSV ขาด/ลา/มาสาย (HR)
+                              </button>
+                              <button 
+                                type="button" 
+                                className="primary" 
+                                style={{ fontSize: '12px', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                onClick={() => {
+                                  setEditingQuotaUser(me.id);
+                                  setManageQuotaModalOpen(true);
+                                }}
+                                title="จัดการและเติมสิทธิ์วันลาประจำปีของพนักงานรายคน"
+                              >
+                                <Settings size={14} /> เติมสิทธิ์การลา (HR Quota)
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {/* Filter chips */}
@@ -3186,6 +3720,155 @@ export default function App() {
                       </section>
                     </div>
                   </div>
+
+                  {/* Team Annual Leave Quota & Balances Table (Open Transparency) */}
+                  <section className="panel att-quota-table-card" style={{ marginTop: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+                      <div>
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '18px' }}>
+                          <ShieldCheck size={20} color="#059669" /> สิทธิ์วันลาประจำปีของสมาชิกในทีม (Team Leave Quota & Balances)
+                        </h2>
+                        <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '13px' }}>
+                          ความโปร่งใสในทีม: ทุกคนในระบบสามารถตรวจสอบสิทธิ์วันลาและวันลาคงเหลือของทุกคนได้ · ปี {new Date().getFullYear()}
+                        </p>
+                      </div>
+                      {(me.isHr || me.isAdmin) && (
+                        <button
+                          type="button"
+                          className="primary"
+                          style={{ fontSize: '13px', padding: '7px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          onClick={() => {
+                            setEditingQuotaUser(members[0]?.id || me.id);
+                            setManageQuotaModalOpen(true);
+                          }}
+                        >
+                          <Settings size={14} /> จัดการ/เติมสิทธิ์พนักงาน (HR)
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="quota-table">
+                        <thead>
+                          <tr>
+                            <th>พนักงาน</th>
+                            <th>บทบาทในระบบ</th>
+                            <th>🤒 ลาป่วย (ใช้/ทั้งหมด)</th>
+                            <th>💼 ลากิจ (ใช้/ทั้งหมด)</th>
+                            <th>🏖️ พักร้อน (ใช้/ทั้งหมด)</th>
+                            <th>🏠 WFH (ใช้/ทั้งหมด)</th>
+                            <th>คงเหลือรวม</th>
+                            {(me.isHr || me.isAdmin) && <th>จัดการ (HR)</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {members.map(m => {
+                            const quota = leaveQuotas.find(q => q.user_id === m.id) || {
+                              user_id: m.id,
+                              year: new Date().getFullYear(),
+                              sick_total: 30,
+                              sick_used: 0,
+                              personal_total: 7,
+                              personal_used: 0,
+                              vacation_total: 10,
+                              vacation_used: 0,
+                              wfh_total: 30,
+                              wfh_used: 0
+                            };
+                            const totalLeft = (quota.sick_total - quota.sick_used) +
+                              (quota.personal_total - quota.personal_used) +
+                              (quota.vacation_total - quota.vacation_used) +
+                              (quota.wfh_total - quota.wfh_used);
+
+                            const roleType = m.role_type || (m.isAdmin ? 'admin' : m.isHr ? 'hr' : m.isExecutive ? 'executive' : 'member');
+
+                            return (
+                              <tr key={m.id}>
+                                <td>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <Avatar member={m} small />
+                                    <div>
+                                      <strong>{m.name}{m.id === me.id ? ' (คุณ)' : ''}</strong>
+                                      <div style={{ fontSize: '11px', color: '#64748b' }}>{m.role}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  {roleType === 'admin' ? (
+                                    <span className="role-tag-badge admin">👑 Admin</span>
+                                  ) : roleType === 'hr' ? (
+                                    <span className="role-tag-badge hr">💼 HR</span>
+                                  ) : roleType === 'executive' ? (
+                                    <span className="role-tag-badge executive">👔 ผู้บริหาร</span>
+                                  ) : (
+                                    <span className="role-tag-badge member">👤 พนักงาน</span>
+                                  )}
+                                </td>
+                                <td>
+                                  <div className="quota-bar-cell">
+                                    <span>{quota.sick_used} / {quota.sick_total} วัน</span>
+                                    <div className="quota-mini-bar">
+                                      <div className="fill sick" style={{ width: `${Math.min(100, (quota.sick_used / (quota.sick_total || 1)) * 100)}%` }} />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="quota-bar-cell">
+                                    <span>{quota.personal_used} / {quota.personal_total} วัน</span>
+                                    <div className="quota-mini-bar">
+                                      <div className="fill personal" style={{ width: `${Math.min(100, (quota.personal_used / (quota.personal_total || 1)) * 100)}%` }} />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="quota-bar-cell">
+                                    <span>{quota.vacation_used} / {quota.vacation_total} วัน</span>
+                                    <div className="quota-mini-bar">
+                                      <div className="fill vacation" style={{ width: `${Math.min(100, (quota.vacation_used / (quota.vacation_total || 1)) * 100)}%` }} />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="quota-bar-cell">
+                                    <span>{quota.wfh_used} / {quota.wfh_total} วัน</span>
+                                    <div className="quota-mini-bar">
+                                      <div className="fill wfh" style={{ width: `${Math.min(100, (quota.wfh_used / (quota.wfh_total || 1)) * 100)}%` }} />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <span className="quota-left-badge" style={{ background: totalLeft > 10 ? '#ecfdf5' : '#fef3c7', color: totalLeft > 10 ? '#065f46' : '#92400e', padding: '3px 8px', borderRadius: '8px', fontWeight: 600, fontSize: '12px' }}>
+                                    เหลือ {totalLeft} วัน
+                                  </span>
+                                </td>
+                                {(me.isHr || me.isAdmin) && (
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="text-button"
+                                      style={{ fontSize: '12px', color: '#0284c7', fontWeight: 600 }}
+                                      onClick={() => {
+                                        setEditingQuotaUser(m.id);
+                                        setQuotaFormValues({
+                                          sick: quota.sick_total,
+                                          personal: quota.personal_total,
+                                          vacation: quota.vacation_total,
+                                          wfh: quota.wfh_total
+                                        });
+                                        setManageQuotaModalOpen(true);
+                                      }}
+                                    >
+                                      ✏️ เติม/แก้ไข
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
                 </div>
               )}
 
@@ -4346,6 +5029,144 @@ export default function App() {
                       </>
                     )}
                   </section>
+
+                  {/* Role & Permissions Management Panel */}
+                  <section className="panel" style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+                      <div>
+                        <h2><ShieldCheck size={21} />กำหนดบทบาทและสิทธิ์สมาชิก (Roles & Permissions)</h2>
+                        <p>แอดมินสามารถกำหนดสิทธิ์เจ้าหน้าที่ HR, ผู้บริหาร (Executive), หรือสมาชิกระดับต่างๆ ได้ทันที</p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f8fafc', padding: '6px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '12px' }}>
+                        <span style={{ fontWeight: 600, color: '#475569' }}>บทบาทของคุณปัจจุบัน:</span>
+                        <span className={`role-tag-badge ${me.role_type || (me.isAdmin ? 'admin' : me.isHr ? 'hr' : me.isExecutive ? 'executive' : 'member')}`}>
+                          {me.isAdmin ? '👑 Admin' : me.isHr ? '💼 HR' : me.isExecutive ? '👔 ผู้บริหาร' : '👤 สมาชิก'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Role Definition Badges */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '10px 12px' }}>
+                        <strong style={{ color: '#166534', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                          👑 Admin (ผู้ดูแลระบบ)
+                        </strong>
+                        <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#15803d' }}>
+                          ดูแลระบบภาพรวม จัดการห้องประชุม กำหนดสิทธิ์สมาชิกทุกคน
+                        </p>
+                      </div>
+                      <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '10px 12px' }}>
+                        <strong style={{ color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                          💼 HR (เจ้าหน้าที่บุคคล)
+                        </strong>
+                        <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#1d4ed8' }}>
+                          จัดการสิทธิ์การลา เติมโควตาวันลาประจำปี และดาวน์โหลด CSV ขาด/ลา/มาสาย
+                        </p>
+                      </div>
+                      <div style={{ background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '10px', padding: '10px 12px' }}>
+                        <strong style={{ color: '#6b21a8', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                          👔 ผู้บริหาร (Executive)
+                        </strong>
+                        <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#7e22ce' }}>
+                          ได้รับการยกเว้นการลงเวลาเข้างาน มีหน้าที่รับทราบการลาของเจ้าหน้าที่ + แจ้งเตือน LINE Bot / กลุ่ม LINE
+                        </p>
+                      </div>
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 12px' }}>
+                        <strong style={{ color: '#334155', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                          👤 Member (สมาชิกทั่วไป)
+                        </strong>
+                        <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#475569' }}>
+                          พนักงานทั่วไป เช็คอินเข้างาน และยื่นใบลาตามโควตาวันลาประจำปี
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Member Role Assignment Table */}
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="quota-table" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th>สมาชิก</th>
+                            <th>ตำแหน่งงาน</th>
+                            <th>สถานะบทบาทปัจจุบัน</th>
+                            <th style={{ minWidth: '260px' }}>ปรับเปลี่ยนสิทธิ์บทบาท</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {members.map(m => {
+                            const currentRole: RoleType = m.role_type || (m.isAdmin ? 'admin' : m.isHr ? 'hr' : m.isExecutive ? 'executive' : 'member');
+                            return (
+                              <tr key={m.id}>
+                                <td>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <Avatar member={m} small />
+                                    <div>
+                                      <strong>{m.name}{m.id === me.id ? ' (คุณ)' : ''}</strong>
+                                      <div style={{ fontSize: '11px', color: '#64748b' }}>{m.email}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <span style={{ fontSize: '12px', color: '#475569' }}>{m.role}</span>
+                                </td>
+                                <td>
+                                  {currentRole === 'admin' ? (
+                                    <span className="role-tag-badge admin">👑 Admin</span>
+                                  ) : currentRole === 'hr' ? (
+                                    <span className="role-tag-badge hr">💼 HR</span>
+                                  ) : currentRole === 'executive' ? (
+                                    <span className="role-tag-badge executive">👔 ผู้บริหาร</span>
+                                  ) : (
+                                    <span className="role-tag-badge member">👤 สมาชิกทั่วไป</span>
+                                  )}
+                                </td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                    <button
+                                      type="button"
+                                      disabled={busy || currentRole === 'admin'}
+                                      className={`role-select-btn ${currentRole === 'admin' ? 'active-admin' : ''}`}
+                                      onClick={() => void handleAdminSetRole(m.id, 'admin')}
+                                      title="ตั้งเป็น Admin"
+                                    >
+                                      Admin
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={busy || currentRole === 'hr'}
+                                      className={`role-select-btn ${currentRole === 'hr' ? 'active-hr' : ''}`}
+                                      onClick={() => void handleAdminSetRole(m.id, 'hr')}
+                                      title="ตั้งเป็น เจ้าหน้าที่ HR"
+                                    >
+                                      HR
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={busy || currentRole === 'executive'}
+                                      className={`role-select-btn ${currentRole === 'executive' ? 'active-exec' : ''}`}
+                                      onClick={() => void handleAdminSetRole(m.id, 'executive')}
+                                      title="ตั้งเป็น ผู้บริหาร (ยกเว้นลงเวลา)"
+                                    >
+                                      Executive
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={busy || currentRole === 'member'}
+                                      className={`role-select-btn ${currentRole === 'member' ? 'active-member' : ''}`}
+                                      onClick={() => void handleAdminSetRole(m.id, 'member')}
+                                      title="ตั้งเป็น สมาชิกทั่วไป"
+                                    >
+                                      Member
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
                 </div>
               )}
 
@@ -4980,6 +5801,263 @@ export default function App() {
           onExit={() => setGoKartActive(false)}
           playerName={me.name}
         />
+      )}
+
+      {/* 10. HR LEAVE QUOTA MANAGEMENT MODAL */}
+      {manageQuotaModalOpen && (
+        <div className="modal-backdrop" onClick={() => setManageQuotaModalOpen(false)}>
+          <div className="modal" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
+                  <Settings size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '17px' }}>จัดการโควตาสิทธิ์วันลาประจำปี</h3>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>ฝ่ายบุคคล (HR) กำหนดและเติมวันลาพนักงานรายคน</p>
+                </div>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setManageQuotaModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={e => {
+              e.preventDefault();
+              if (editingQuotaUser) {
+                void handleUpdateLeaveQuota(editingQuotaUser, quotaFormValues);
+              }
+            }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#334155' }}>
+                  เลือกพนักงานที่ต้องการปรับปรุงสิทธิ์:
+                </label>
+                <select
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: 'white' }}
+                  value={editingQuotaUser || ''}
+                  onChange={e => {
+                    const uId = e.target.value;
+                    setEditingQuotaUser(uId);
+                    const q = leaveQuotas.find(item => item.user_id === uId);
+                    if (q) {
+                      setQuotaFormValues({
+                        sick: q.sick_total,
+                        personal: q.personal_total,
+                        vacation: q.vacation_total,
+                        wfh: q.wfh_total
+                      });
+                    }
+                  }}
+                >
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} ({m.role}) - {m.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                    🤒 ลาป่วย (วัน/ปี):
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="365"
+                    required
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    value={quotaFormValues.sick}
+                    onChange={e => setQuotaFormValues(prev => ({ ...prev, sick: parseInt(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                    💼 ลากิจ (วัน/ปี):
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="365"
+                    required
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    value={quotaFormValues.personal}
+                    onChange={e => setQuotaFormValues(prev => ({ ...prev, personal: parseInt(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                    🏖️ ลาพักร้อน (วัน/ปี):
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="365"
+                    required
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    value={quotaFormValues.vacation}
+                    onChange={e => setQuotaFormValues(prev => ({ ...prev, vacation: parseInt(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                    🏠 สิทธิ์ WFH (วัน/ปี):
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="365"
+                    required
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    value={quotaFormValues.wfh}
+                    onChange={e => setQuotaFormValues(prev => ({ ...prev, wfh: parseInt(e.target.value) || 0 }))}
+                  />
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px', fontSize: '12px', color: '#64748b' }}>
+                💡 <strong>หมายเหตุ:</strong> การบันทึกจะมีผลกับปี {new Date().getFullYear()} ทันที และพนักงานทุกคนสามารถตรวจสอบสิทธิ์คงเหลือของตนเองและเพื่อนร่วมทีมได้
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button type="button" className="secondary" onClick={() => setManageQuotaModalOpen(false)}>
+                  ยกเลิก
+                </button>
+                <button type="submit" className="primary" disabled={busy || !editingQuotaUser}>
+                  บันทึกโควตาวันลา
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 11. MEDICAL CERTIFICATE LIGHTBOX MODAL */}
+      {activeCertViewModal && (
+        <div className="chat-image-lightbox-overlay" onClick={() => setActiveCertViewModal(null)}>
+          <div className="lightbox-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '720px' }}>
+            <button
+              type="button"
+              className="lightbox-close-btn"
+              onClick={() => setActiveCertViewModal(null)}
+              title="ปิด (ESC หรือคลิกปุ่ม)"
+            >
+              <X size={20} />
+            </button>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #334155', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ShieldCheck size={20} color="#10b981" />
+              <div>
+                <strong style={{ display: 'block', fontSize: '15px' }}>เอกสารใบรับรองแพทย์</strong>
+                <small style={{ color: '#94a3b8' }}>แนบประกอบการลาป่วยย้อนหลัง</small>
+              </div>
+            </div>
+            <div style={{ padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#0f172a' }}>
+              <img
+                src={activeCertViewModal}
+                alt="ใบรับรองแพทย์"
+                style={{ maxHeight: '70vh', maxWidth: '100%', borderRadius: '8px', objectFit: 'contain' }}
+              />
+            </div>
+            <div className="lightbox-actions" style={{ justifyContent: 'space-between', padding: '12px 20px' }}>
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>สถานะ: บันทึกเข้าสู่แฟ้มประวัติการลาเรียบร้อย</span>
+              <a
+                href={activeCertViewModal}
+                download={`medical-certificate-${Date.now()}.png`}
+                className="lightbox-download-btn"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Download size={14} /> ดาวน์โหลดเอกสาร
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 12. LINE BOT CONFIGURATION MODAL */}
+      {lineBotModalOpen && (
+        <div className="modal-backdrop" onClick={() => setLineBotModalOpen(false)}>
+          <div className="modal" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#e8f9ed', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#06C755' }}>
+                  <MessageSquare size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '17px' }}>ตั้งค่า LINE Bot (Messaging API)</h3>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>เชื่อมต่อเพื่อส่งแจ้งเตือนการลาและเรียกประชุมเข้ากลุ่ม LINE</p>
+                </div>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setLineBotModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={e => {
+              e.preventDefault();
+              saveLineSettings(lineBotFormValues);
+              setLineBotModalOpen(false);
+              notify('บันทึกการตั้งค่า LINE Bot เรียบร้อยแล้ว!');
+            }}>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                  Channel Access Token (Long-lived):
+                </label>
+                <input
+                  type="password"
+                  placeholder="LINE Developers Channel Access Token"
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  value={lineBotFormValues.token}
+                  onChange={e => setLineBotFormValues(prev => ({ ...prev, token: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                  Group ID (ขึ้นต้นด้วย C...) หรือ User ID (ขึ้นต้นด้วย U...):
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น C1234567890abcdef... หรือ U..."
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  value={lineBotFormValues.targetId}
+                  onChange={e => setLineBotFormValues(prev => ({ ...prev, targetId: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px', fontSize: '12px', color: '#64748b' }}>
+                💡 <strong>เคล็ดลับ:</strong> หากยังไม่ได้ออก Token สามารถกดปุ่มแชร์ข้อความเข้าแอป LINE โดยตรงได้ทันทีโดยไม่ต้องตั้งค่า Bot ครับ
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  style={{ fontSize: '12px', color: '#06C755', fontWeight: 600 }}
+                  onClick={async () => {
+                    const res = await sendLineBotPush({
+                      text: '🟢 [ทดสอบระบบ] การเชื่อมต่อ LINE Bot สำเร็จเรียบร้อยจาก PRIME Virtual Office!',
+                      token: lineBotFormValues.token,
+                      targetId: lineBotFormValues.targetId
+                    });
+                    notify(res.message);
+                  }}
+                >
+                  ⚡ ทดสอบส่งข้อความ
+                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="button" className="secondary" onClick={() => setLineBotModalOpen(false)}>
+                    ปิด
+                  </button>
+                  <button type="submit" className="primary" style={{ background: '#06C755', borderColor: '#06C755' }}>
+                    บันทึกการตั้งค่า
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Toast Alert */}

@@ -31,6 +31,21 @@ export type ConferenceParticipant = {
   stream?: MediaStream;
 };
 
+export type VideoEffect = 
+  | 'none'
+  | 'blur-light'
+  | 'blur-heavy'
+  | 'bg-office'
+  | 'bg-loft'
+  | 'bg-cafe'
+  | 'bg-beach'
+  | 'avatar-doll'
+  | 'avatar-cat'
+  | 'filter-warm'
+  | 'filter-beauty'
+  | 'filter-cyberpunk'
+  | 'filter-mono';
+
 type ConferenceSignal =
   | { type: 'join'; from: string; name: string }
   | { type: 'presence'; from: string; to: string; name: string; isCameraOn: boolean; isMuted: boolean; isScreenSharing: boolean; isHandRaised: boolean }
@@ -41,13 +56,23 @@ type ConferenceSignal =
   | { type: 'media-state'; from: string; isCameraOn: boolean; isMuted: boolean; isScreenSharing: boolean; isHandRaised: boolean }
   | { type: 'speaking'; from: string; isSpeaking: boolean }
   | { type: 'chat'; from: string; name: string; id: string; text: string; time: string }
-  | { type: 'mute-request'; from: string; to: string };
+  | { type: 'mute-request'; from: string; to: string }
+  | { type: 'meeting-invite'; from: string; senderName: string; roomId: RoomId; title: string; meetUrl?: string };
 
 export class VideoConferenceClient {
   public myId: string;
   public myName: string;
   private supabase: SupabaseClient | null;
   public roomId: RoomId | null = null;
+  public currentEffect: VideoEffect = 'none';
+
+  // Video processing elements for effects
+  private rawCameraTrack: MediaStreamTrack | null = null;
+  private effectCanvas: HTMLCanvasElement | null = null;
+  private effectVideo: HTMLVideoElement | null = null;
+  private effectAnimFrame: number | null = null;
+  private avatarBlinkState = false;
+  private avatarLastBlinkTime = 0;
 
   // Media Streams
   public localStream: MediaStream | null = null;
@@ -135,7 +160,11 @@ export class VideoConferenceClient {
     // Apply initial mute/camera state
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(t => { t.enabled = !this.isMuted; });
-      this.localStream.getVideoTracks().forEach(t => { t.enabled = this.isCameraOn; });
+      const vt = this.localStream.getVideoTracks()[0];
+      if (vt) {
+        vt.enabled = this.isCameraOn;
+        this.rawCameraTrack = vt;
+      }
     }
 
     // 2. Setup VAD (Voice Activity Detection)
@@ -245,6 +274,14 @@ export class VideoConferenceClient {
       this.audioCtx = null;
       this.analyser = null;
     }
+
+    // Clean up video effects
+    this.stopVideoEffect();
+    if (this.rawCameraTrack) {
+      try { this.rawCameraTrack.stop(); } catch {}
+      this.rawCameraTrack = null;
+    }
+    this.currentEffect = 'none';
 
     this.roomId = null;
     this.isScreenSharing = false;
@@ -828,6 +865,341 @@ export class VideoConferenceClient {
     } catch (err) {
       console.warn('VAD setup skipped:', err);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Video Effects Engine (Virtual Background, Avatar, Camera Filters)
+  // ---------------------------------------------------------------------------
+  public async setVideoEffect(effect: VideoEffect): Promise<void> {
+    this.currentEffect = effect;
+
+    if (!this.localStream) return;
+
+    if (effect === 'none') {
+      this.stopVideoEffect();
+      if (this.rawCameraTrack) {
+        this.replaceLocalVideoTrack(this.rawCameraTrack);
+      }
+      this.notifyState();
+      return;
+    }
+
+    // Initialize Canvas & Hidden Video if needed
+    if (!this.effectCanvas) {
+      this.effectCanvas = document.createElement('canvas');
+      this.effectCanvas.width = 1280;
+      this.effectCanvas.height = 720;
+    }
+
+    if (!this.effectVideo) {
+      this.effectVideo = document.createElement('video');
+      this.effectVideo.muted = true;
+      this.effectVideo.playsInline = true;
+      this.effectVideo.autoplay = true;
+    }
+
+    // Ensure raw camera stream is playing in hidden video element
+    if (this.rawCameraTrack && this.effectVideo.srcObject !== this.localStream) {
+      this.effectVideo.srcObject = new MediaStream([this.rawCameraTrack]);
+      await this.effectVideo.play().catch(() => {});
+    }
+
+    // Start render loop
+    if (!this.effectAnimFrame) {
+      this.renderEffectLoop();
+    }
+
+    // Capture canvas video stream
+    const canvasStream = (this.effectCanvas as any).captureStream ? (this.effectCanvas as any).captureStream(30) : null;
+    if (canvasStream) {
+      const processedTrack = canvasStream.getVideoTracks()[0];
+      if (processedTrack) {
+        this.replaceLocalVideoTrack(processedTrack);
+      }
+    }
+
+    this.notifyState();
+  }
+
+  public stopVideoEffect() {
+    if (this.effectAnimFrame) {
+      cancelAnimationFrame(this.effectAnimFrame);
+      this.effectAnimFrame = null;
+    }
+    if (this.effectVideo) {
+      try {
+        this.effectVideo.pause();
+        this.effectVideo.srcObject = null;
+      } catch {}
+    }
+  }
+
+  private replaceLocalVideoTrack(newTrack: MediaStreamTrack) {
+    if (!this.localStream) return;
+    const oldTrack = this.localStream.getVideoTracks()[0];
+    if (oldTrack && oldTrack !== newTrack && oldTrack !== this.rawCameraTrack) {
+      try { oldTrack.stop(); } catch {}
+    }
+    if (oldTrack) {
+      this.localStream.removeTrack(oldTrack);
+    }
+    this.localStream.addTrack(newTrack);
+    newTrack.enabled = this.isCameraOn;
+
+    // Propagate to all connected WebRTC peers
+    this.peers.forEach(peer => {
+      const sender = peer.getSenders().find(s => s.track?.kind === 'video');
+      if (sender) {
+        sender.replaceTrack(newTrack).catch(() => {});
+      }
+    });
+  }
+
+  private renderEffectLoop = () => {
+    if (!this.effectCanvas || this.currentEffect === 'none') {
+      this.effectAnimFrame = null;
+      return;
+    }
+
+    const ctx = this.effectCanvas.getContext('2d');
+    if (ctx) {
+      const w = this.effectCanvas.width;
+      const h = this.effectCanvas.height;
+      const now = performance.now();
+
+      // Check avatar blinking
+      if (now - this.avatarLastBlinkTime > 3200) {
+        this.avatarBlinkState = true;
+        if (now - this.avatarLastBlinkTime > 3400) {
+          this.avatarBlinkState = false;
+          this.avatarLastBlinkTime = now;
+        }
+      }
+
+      ctx.save();
+
+      if (this.currentEffect === 'avatar-doll' || this.currentEffect === 'avatar-cat') {
+        // --- 1. AVATAR MODE ---
+        // Background gradient
+        const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+        bgGrad.addColorStop(0, '#1e293b');
+        bgGrad.addColorStop(1, '#0f172a');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Ambient glow circle
+        ctx.fillStyle = this.currentEffect === 'avatar-cat' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(244, 114, 182, 0.15)';
+        ctx.beginPath();
+        ctx.arc(w / 2, h / 2, 280, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw Avatar Character
+        const centerX = w / 2;
+        const centerY = h / 2 + 30;
+
+        if (this.currentEffect === 'avatar-cat') {
+          // Cyber Cat Avatar
+          ctx.fillStyle = '#f59e0b'; // Cat Face
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, 140, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Cat Ears
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.moveTo(centerX - 100, centerY - 90);
+          ctx.lineTo(centerX - 140, centerY - 210);
+          ctx.lineTo(centerX - 30, centerY - 130);
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.moveTo(centerX + 100, centerY - 90);
+          ctx.lineTo(centerX + 140, centerY - 210);
+          ctx.lineTo(centerX + 30, centerY - 130);
+          ctx.fill();
+
+          // Cat Eyes (Blink or Open)
+          ctx.fillStyle = '#1e293b';
+          if (this.avatarBlinkState) {
+            ctx.fillRect(centerX - 60, centerY - 20, 30, 4);
+            ctx.fillRect(centerX + 30, centerY - 20, 30, 4);
+          } else {
+            ctx.beginPath();
+            ctx.arc(centerX - 45, centerY - 20, 14, 0, Math.PI * 2);
+            ctx.arc(centerX + 45, centerY - 20, 14, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Cat Nose & Mouth (Reactive to speaking)
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.arc(centerX, centerY + 10, 8, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#1e293b';
+          if (this.isSpeaking) {
+            ctx.beginPath();
+            ctx.ellipse(centerX, centerY + 45, 18, 22, 0, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#1e293b';
+            ctx.beginPath();
+            ctx.arc(centerX - 12, centerY + 25, 12, 0, Math.PI);
+            ctx.arc(centerX + 12, centerY + 25, 12, 0, Math.PI);
+            ctx.stroke();
+          }
+        } else {
+          // Anime Doll Avatar
+          // Hair back
+          ctx.fillStyle = '#475569';
+          ctx.beginPath();
+          ctx.arc(centerX, centerY - 10, 160, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Face
+          ctx.fillStyle = '#ffedd5';
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, 130, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Eyes
+          ctx.fillStyle = '#2563eb';
+          if (this.avatarBlinkState) {
+            ctx.fillRect(centerX - 60, centerY - 15, 34, 4);
+            ctx.fillRect(centerX + 26, centerY - 15, 34, 4);
+          } else {
+            ctx.beginPath();
+            ctx.arc(centerX - 45, centerY - 15, 16, 0, Math.PI * 2);
+            ctx.arc(centerX + 45, centerY - 15, 16, 0, Math.PI * 2);
+            ctx.fill();
+            // Highlight
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(centerX - 40, centerY - 20, 5, 0, Math.PI * 2);
+            ctx.arc(centerX + 50, centerY - 20, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Cheeks Blush
+          ctx.fillStyle = 'rgba(244, 63, 94, 0.35)';
+          ctx.beginPath();
+          ctx.arc(centerX - 70, centerY + 20, 16, 0, Math.PI * 2);
+          ctx.arc(centerX + 70, centerY + 20, 16, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Mouth (Reactive to speaking)
+          ctx.fillStyle = '#e11d48';
+          if (this.isSpeaking) {
+            ctx.beginPath();
+            ctx.ellipse(centerX, centerY + 48, 16, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY + 45, 12, 0, Math.PI);
+            ctx.fill();
+          }
+        }
+
+        // Name tag at bottom of avatar
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.roundRect(centerX - 80, centerY + 180, 160, 36, 18);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`✨ ${this.myName}`, centerX, centerY + 204);
+
+      } else {
+        // --- 2. VIRTUAL BACKGROUNDS & FILTERS ---
+        // Draw underlying virtual scene
+        if (this.currentEffect === 'bg-office') {
+          const grad = ctx.createLinearGradient(0, 0, w, h);
+          grad.addColorStop(0, '#1e3a8a');
+          grad.addColorStop(0.5, '#3b82f6');
+          grad.addColorStop(1, '#93c5fd');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, w, h);
+          // Office windows illustration
+          ctx.fillStyle = 'rgba(255,255,255,0.18)';
+          for (let i = 0; i < 4; i++) {
+            ctx.fillRect(40 + i * 310, 30, 260, 480);
+          }
+        } else if (this.currentEffect === 'bg-loft') {
+          const grad = ctx.createLinearGradient(0, 0, w, h);
+          grad.addColorStop(0, '#27272a');
+          grad.addColorStop(1, '#52525b');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, w, h);
+          // Loft brick accents
+          ctx.fillStyle = '#3f3f46';
+          ctx.fillRect(0, h - 160, w, 160);
+        } else if (this.currentEffect === 'bg-cafe') {
+          const grad = ctx.createLinearGradient(0, 0, w, h);
+          grad.addColorStop(0, '#78350f');
+          grad.addColorStop(1, '#d97706');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, w, h);
+        } else if (this.currentEffect === 'bg-beach') {
+          const grad = ctx.createLinearGradient(0, 0, 0, h);
+          grad.addColorStop(0, '#f97316');
+          grad.addColorStop(0.45, '#fbbf24');
+          grad.addColorStop(0.7, '#0284c7');
+          grad.addColorStop(1, '#0c4a6e');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, w, h);
+        }
+
+        // Apply filters to camera video
+        if (this.currentEffect === 'blur-light') {
+          ctx.filter = 'blur(6px)';
+        } else if (this.currentEffect === 'blur-heavy') {
+          ctx.filter = 'blur(16px)';
+        } else if (this.currentEffect === 'filter-warm') {
+          ctx.filter = 'sepia(0.3) saturate(1.4) brightness(1.05)';
+        } else if (this.currentEffect === 'filter-beauty') {
+          ctx.filter = 'brightness(1.08) contrast(1.05) saturate(1.15)';
+        } else if (this.currentEffect === 'filter-cyberpunk') {
+          ctx.filter = 'hue-rotate(290deg) contrast(1.3) saturate(1.5)';
+        } else if (this.currentEffect === 'filter-mono') {
+          ctx.filter = 'grayscale(1) contrast(1.2) brightness(0.95)';
+        } else {
+          ctx.filter = 'none';
+        }
+
+        // Render camera frame
+        if (this.effectVideo && this.effectVideo.readyState >= 2) {
+          if (this.currentEffect.startsWith('bg-')) {
+            // Virtual background: draw central video with vignette blend
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(w / 2, h / 2, w * 0.42, h * 0.52, 0, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(this.effectVideo, 0, 0, w, h);
+            ctx.restore();
+          } else {
+            ctx.drawImage(this.effectVideo, 0, 0, w, h);
+          }
+        }
+      }
+
+      ctx.restore();
+    }
+
+    this.effectAnimFrame = requestAnimationFrame(this.renderEffectLoop);
+  };
+
+  // Broadcast Instant Meeting Invitation
+  public broadcastMeetingInvite(title: string, meetUrl?: string) {
+    if (!this.roomId) return;
+    this.broadcastSignal({
+      type: 'meeting-invite',
+      from: this.myId,
+      senderName: this.myName,
+      roomId: this.roomId,
+      title,
+      meetUrl
+    });
   }
 
   private notifyState() {

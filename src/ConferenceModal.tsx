@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { 
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff, Hand, 
-  MessageSquare, X, Minimize2, Maximize2, Users, PhoneOff, Send, Pin
+  MessageSquare, X, Minimize2, Maximize2, Users, PhoneOff, Send, Pin,
+  Sparkles, Bell, Mail, SendHorizontal, Check, Move
 } from 'lucide-react';
-import type { VideoConferenceClient, ConferenceParticipant, ConferenceMessage } from './conference';
+import type { VideoConferenceClient, ConferenceParticipant, VideoEffect } from './conference';
+import { sendLineBotPush, openLineShare, DEFAULT_LINE_TOKEN, DEFAULT_LINE_TARGET_ID } from './lineBot';
 
 interface ConferenceModalProps {
   client: VideoConferenceClient;
@@ -41,7 +43,7 @@ function VideoTile({
           ref={videoRef} 
           autoPlay 
           playsInline 
-          muted={true} // Audio is cleanly handled by dedicated background audio elements to prevent echo and maintain uninterrupted audio
+          muted={true} // Audio is handled by background audio elements to prevent echo
           className={`video-element ${isSelf && !participant.isScreenSharing ? 'mirror' : ''}`}
         />
       ) : (
@@ -98,6 +100,28 @@ export function ConferenceModal({
   const [chatInput, setChatInput] = useState('');
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Video Effects Drawer State
+  const [effectsOpen, setEffectsOpen] = useState(false);
+  const [selectedEffect, setSelectedEffect] = useState<VideoEffect>(client.currentEffect || 'none');
+
+  // Call / Invite Meeting Modal State
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteTitle, setInviteTitle] = useState(`ประชุมด่วนที่ ${roomName}`);
+  const [lineToken, setLineToken] = useState(() => localStorage.getItem('prime-line-token') || DEFAULT_LINE_TOKEN);
+  const [lineTargetId, setLineTargetId] = useState(() => localStorage.getItem('prime-line-target-id') || DEFAULT_LINE_TARGET_ID);
+  const [telegramToken, setTelegramToken] = useState(() => localStorage.getItem('prime-tg-token') || '');
+  const [telegramChatId, setTelegramChatId] = useState(() => localStorage.getItem('prime-tg-chat-id') || '');
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
+
+  // Draggable PiP coordinates
+  const [pipPos, setPipPos] = useState({ x: window.innerWidth - 320, y: window.innerHeight - 250 });
+  const isDraggingRef = useRef(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+
   // Force re-render whenever conference state changes
   useEffect(() => {
     client.onStateChange = () => setTick(t => t + 1);
@@ -113,7 +137,6 @@ export function ConferenceModal({
 
   const participants = client.getParticipants();
   const screenSharer = participants.find(p => p.isScreenSharing);
-  // Default spotlight to screen sharer if active, or user selected spotlight
   const effectiveSpotlightId = spotlightId || (screenSharer ? screenSharer.id : null);
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -123,21 +146,142 @@ export function ConferenceModal({
     setChatInput('');
   };
 
+  const handleApplyEffect = async (effect: VideoEffect) => {
+    setSelectedEffect(effect);
+    await client.setVideoEffect(effect);
+  };
+
+  // Draggable PiP handlers
+  const handlePointerDown = (e: React.PointerEvent) => {
+    isDraggingRef.current = true;
+    dragOffsetRef.current = {
+      x: e.clientX - pipPos.x,
+      y: e.clientY - pipPos.y
+    };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current) return;
+    const maxX = window.innerWidth - 300;
+    const maxY = window.innerHeight - 200;
+    const nextX = Math.max(16, Math.min(maxX, e.clientX - dragOffsetRef.current.x));
+    const nextY = Math.max(16, Math.min(maxY, e.clientY - dragOffsetRef.current.y));
+    setPipPos({ x: nextX, y: nextY });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    isDraggingRef.current = false;
+    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+  };
+
+  // Toggle stage fullscreen
+  const handleToggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      modalContainerRef.current?.requestFullscreen?.().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setIsFullscreen(false);
+    }
+  };
+
+  // Build standard meeting text
+  const getMeetingInviteText = () => {
+    return `🚨 [เรียกประชุมด่วน - PRIME VIRTUAL OFFICE]\n\n📌 เรื่อง: ${inviteTitle}\n🏢 ห้องประชุม: ${roomName}\n👤 ผู้เรียก: ${client.myName}\n⏰ เวลา: ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.\n\n👉 กรุณาเข้าสู่ระบบ PRIME Teamwork เพื่อร่วมประชุมทันที!`;
+  };
+
+  // Send Call Meeting / LINE Bot & Telegram Invite
+  const handleSendMeetingInvite = async () => {
+    setInviteStatus('กำลังส่งการแจ้งเตือน...');
+    const meetingText = getMeetingInviteText();
+    
+    // 1. Broadcast in-app
+    client.broadcastMeetingInvite(inviteTitle);
+
+    // 2. Send via LINE Bot if token and target ID provided
+    if (lineToken.trim() && lineTargetId.trim()) {
+      try {
+        localStorage.setItem('prime-line-token', lineToken.trim());
+        localStorage.setItem('prime-line-target-id', lineTargetId.trim());
+        await sendLineBotPush({
+          text: meetingText,
+          token: lineToken.trim(),
+          targetId: lineTargetId.trim()
+        });
+      } catch (lineErr) {
+        console.warn('LINE Bot send error:', lineErr);
+      }
+    }
+
+    // 3. Send via Telegram Bot if token and chat ID provided
+    if (telegramToken.trim() && telegramChatId.trim()) {
+      try {
+        localStorage.setItem('prime-tg-token', telegramToken.trim());
+        localStorage.setItem('prime-tg-chat-id', telegramChatId.trim());
+
+        const text = `🚨 *[เรียกประชุมด่วน - PRIME VIRTUAL OFFICE]*\n\n📌 *เรื่อง:* ${inviteTitle}\n🏢 *ห้องประชุม:* ${roomName}\n👤 *ผู้เรียก:* ${client.myName}\n\nกรุณาเข้าสู่ระบบ PRIME Teamwork เพื่อร่วมประชุมทันที!`;
+        const res = await fetch(`https://api.telegram.org/bot${telegramToken.trim()}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: telegramChatId.trim(),
+            text,
+            parse_mode: 'Markdown'
+          })
+        });
+        if (!res.ok) {
+          throw new Error('Telegram bot error');
+        }
+      } catch (err) {
+        console.warn('Telegram send failed:', err);
+      }
+    }
+
+    setInviteStatus('ส่งแจ้งเตือนสำเร็จแล้ว!');
+    setTimeout(() => {
+      setInviteStatus(null);
+      setInviteOpen(false);
+    }, 1200);
+  };
+
+  // Generate Email mailto link
+  const generateMailtoLink = () => {
+    const subject = encodeURIComponent(`[เชิญประชุมด่วน] ${inviteTitle} (${roomName})`);
+    const body = encodeURIComponent(`เรียนทีมงาน PRIME,\n\nขอเชิญร่วมประชุมด่วน:\nหัวข้อ: ${inviteTitle}\nสถานที่: ห้อง ${roomName} บน PRIME Virtual Office\nผู้เรียกประชุม: ${client.myName}\n\nกรุณาเปิดระบบ PRIME Teamwork เพื่อเข้าร่วมการประชุมได้ทันทีครับ`);
+    return `mailto:?subject=${subject}&body=${body}`;
+  };
+
   // ---------------------------------------------------------------------------
-  // 1. MINI FLOATING PLAYER (Picture-in-Picture Mode)
+  // 1. MINI FLOATING PLAYER (Picture-in-Picture Mode - Draggable anywhere)
   // ---------------------------------------------------------------------------
   if (isMinimized) {
     const featuredParticipant = screenSharer || participants.find(p => p.isSpeaking) || participants[0];
 
     return (
-      <aside className="conference-mini-player">
-        <div className="mini-player-header">
+      <aside 
+        className="conference-mini-player draggable-pip"
+        style={{
+          left: `${pipPos.x}px`,
+          top: `${pipPos.y}px`,
+          right: 'auto',
+          bottom: 'auto'
+        }}
+      >
+        <div 
+          className="mini-player-header drag-handle"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          title="คลิกแล้วลากเพื่อย้ายตำแหน่งจอเล็กไปที่ไหนก็ได้"
+        >
           <div className="mini-title">
+            <Move size={12} style={{ opacity: 0.7, marginRight: '4px' }} />
             <span className="live-dot" />
             <strong>{roomName}</strong>
             <span className="mini-count">({participants.length})</span>
           </div>
-          <div className="mini-actions">
+          <div className="mini-actions" onPointerDown={e => e.stopPropagation()}>
             <button className="mini-btn" onClick={onToggleMinimize} title="ขยายเต็มหน้าจอ">
               <Maximize2 size={13} />
             </button>
@@ -189,7 +333,7 @@ export function ConferenceModal({
   // 2. FULL CONCURRENT MEETING STAGE
   // ---------------------------------------------------------------------------
   return (
-    <div className="conference-modal-backdrop">
+    <div className={`conference-modal-backdrop ${isFullscreen ? 'fullscreen-mode' : ''}`} ref={modalContainerRef}>
       <div className="conference-stage-card">
         {/* Stage Header */}
         <header className="conference-header">
@@ -206,14 +350,47 @@ export function ConferenceModal({
           </div>
 
           <div className="conference-header-right">
+            {/* Call Meeting / Invite Button */}
+            <button 
+              className="stage-tool-btn invite-btn"
+              onClick={() => setInviteOpen(true)}
+              title="เรียกประชุมด่วน / ส่งการแจ้งเตือนทางอีเมล หรือ Telegram"
+            >
+              <Bell size={15} />
+              <span>เรียกประชุมด่วน</span>
+            </button>
+
+            {/* Effects Button */}
+            <button 
+              className={`stage-tool-btn ${effectsOpen ? 'active' : ''}`}
+              onClick={() => setEffectsOpen(!effectsOpen)}
+              title="Virtual Background, Avatar, และ Video Filters"
+            >
+              <Sparkles size={15} color="#ec4899" />
+              <span>ปรับแต่งกล้อง & Avatar</span>
+            </button>
+
+            {/* Toggle Fullscreen Screen */}
+            <button 
+              className="stage-tool-btn" 
+              onClick={handleToggleFullscreen}
+              title={isFullscreen ? 'ย่อจากเต็มจอ' : 'ขยายเต็มหน้าจอ (Fullscreen)'}
+            >
+              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              <span>{isFullscreen ? 'ย่อหน้าต่าง' : 'เต็มหน้าจอ'}</span>
+            </button>
+
+            {/* Minimize to PiP */}
             <button 
               className="stage-tool-btn" 
               onClick={onToggleMinimize} 
               title="ย่อหน้าต่างเป็น Mini-player เพื่อดูงานในออฟฟิศ"
             >
               <Minimize2 size={16} />
-              <span>ย่อหน้าต่าง</span>
+              <span>ย่อจอเล็ก</span>
             </button>
+
+            {/* Close / Leave */}
             <button 
               className="stage-close-btn" 
               onClick={onClose} 
@@ -224,9 +401,9 @@ export function ConferenceModal({
           </div>
         </header>
 
-        {/* Stage Body (Video Grid + Optional Chat Sidebar) */}
+        {/* Stage Body (Video Grid + Optional Panels) */}
         <div className="conference-body">
-          <div className={`conference-video-canvas ${effectiveSpotlightId ? 'has-spotlight' : ''} ${chatOpen ? 'chat-expanded' : ''}`}>
+          <div className={`conference-video-canvas ${effectiveSpotlightId ? 'has-spotlight' : ''} ${chatOpen ? 'chat-expanded' : ''} ${effectsOpen ? 'effects-expanded' : ''}`}>
             {effectiveSpotlightId ? (
               // Spotlight Layout: 1 large main video + sidebar of small tiles
               <div className="spotlight-layout">
@@ -270,6 +447,120 @@ export function ConferenceModal({
               </div>
             )}
           </div>
+
+          {/* Video Effects Sidebar Panel */}
+          {effectsOpen && (
+            <aside className="conference-effects-panel">
+              <div className="effects-panel-header">
+                <h3><Sparkles size={16} color="#ec4899" /> ปรับแต่งกล้อง & Avatar</h3>
+                <button className="chat-close-btn" onClick={() => setEffectsOpen(false)}>
+                  <X size={15} />
+                </button>
+              </div>
+
+              <div className="effects-panel-content">
+                {/* 1. Virtual Backgrounds */}
+                <div className="effect-group">
+                  <span className="effect-group-label">🖼️ พื้นหลังเสมือน (Virtual Background)</span>
+                  <div className="effect-chips-grid">
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'none' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('none')}
+                    >
+                      <span>🚫 กล้องสดปกติ</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'blur-light' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('blur-light')}
+                    >
+                      <span>🌫️ เบลอพื้นหลังเบาๆ</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'blur-heavy' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('blur-heavy')}
+                    >
+                      <span>🌁 เบลอพื้นหลังเข้ม</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'bg-office' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('bg-office')}
+                    >
+                      <span>🏢 ออฟฟิศโมเดิร์น</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'bg-loft' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('bg-loft')}
+                    >
+                      <span>🧱 ลอฟต์สตูดิโอ</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'bg-cafe' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('bg-cafe')}
+                    >
+                      <span>☕ มุมคาเฟ่อบอุ่น</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'bg-beach' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('bg-beach')}
+                    >
+                      <span>🏖️ วิวพระอาทิตย์ริมหาด</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Interactive Avatar Mode */}
+                <div className="effect-group">
+                  <span className="effect-group-label">🎭 อวตารแทนกล้อง (Avatar Audio-Reactive)</span>
+                  <p className="effect-hint">อวตารจะขยับปากและกะพริบตาตามเสียงพูดจริงของคุณโดยอัตโนมัติ</p>
+                  <div className="effect-chips-grid">
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'avatar-doll' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('avatar-doll')}
+                    >
+                      <span>👧🏻 ตุ๊กตาอวตาร 3D Doll</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'avatar-cat' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('avatar-cat')}
+                    >
+                      <span>🐱 น้องแมวส้มไซเบอร์</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Camera Filters */}
+                <div className="effect-group">
+                  <span className="effect-group-label">🎨 ฟิลเตอร์กล้อง (Camera Filters)</span>
+                  <div className="effect-chips-grid">
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'filter-warm' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('filter-warm')}
+                    >
+                      <span>☀️ แสงแดดอบอุ่น (Warm)</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'filter-beauty' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('filter-beauty')}
+                    >
+                      <span>✨ บิวตี้สตูดิโอ (Soft Glow)</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'filter-cyberpunk' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('filter-cyberpunk')}
+                    >
+                      <span>⚡ ไซเบอร์พังก์นีออน</span>
+                    </button>
+                    <button 
+                      className={`effect-chip ${selectedEffect === 'filter-mono' ? 'active' : ''}`}
+                      onClick={() => void handleApplyEffect('filter-mono')}
+                    >
+                      <span>🎞️ ขาวดำคลาสสิก (B&W)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          )}
 
           {/* In-Call Chat Sidebar */}
           {chatOpen && (
@@ -363,6 +654,16 @@ export function ConferenceModal({
               <span>{client.isHandRaised ? 'ยกมืออยู่' : 'ยกมือ'}</span>
             </button>
 
+            {/* Video Effects Button */}
+            <button 
+              className={`control-pill-btn ${effectsOpen ? 'effects-active' : ''}`}
+              onClick={() => setEffectsOpen(!effectsOpen)}
+              title="เอฟเฟกต์กล้อง & Avatar"
+            >
+              <Sparkles size={17} color="#ec4899" />
+              <span>เอฟเฟกต์</span>
+            </button>
+
             {/* In-Call Chat Toggle */}
             <button 
               className={`control-pill-btn ${chatOpen ? 'chat-active' : ''}`}
@@ -388,6 +689,152 @@ export function ConferenceModal({
           </div>
         </footer>
       </div>
+
+      {/* MODAL: Call Meeting / Invite Channels */}
+      {inviteOpen && (
+        <div className="conference-modal-inner-dialog">
+          <div className="invite-dialog-card">
+            <div className="invite-dialog-header">
+              <div>
+                <h3>📢 เรียกประชุมด่วน ({roomName})</h3>
+                <p>ส่งการแจ้งเตือนเชิญเพื่อนร่วมทีมเข้าห้องประชุมทันที</p>
+              </div>
+              <button className="chat-close-btn" onClick={() => setInviteOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="invite-dialog-body">
+              <label className="invite-field-label">หัวข้อการประชุม</label>
+              <input 
+                type="text" 
+                className="invite-input"
+                value={inviteTitle}
+                onChange={e => setInviteTitle(e.target.value)}
+                placeholder="ระบุหัวข้อประชุม เช่น ปรึกษาเคสลูกค้าด่วน…"
+              />
+
+              <div className="invite-channels-box">
+                <span className="channel-box-title">ช่องทางการส่งแจ้งเตือน:</span>
+
+                {/* Channel 1: In-App Broadcast */}
+                <div className="channel-option in-app">
+                  <div className="channel-icon"><Bell size={18} color="#2563eb" /></div>
+                  <div className="channel-info">
+                    <strong>แจ้งเตือนด่วนบนระบบ PRIME</strong>
+                    <small>ขึ้นหน้าต่างป๊อปอัปและส่งเสียงเรียกทุกคนในระบบทันที</small>
+                  </div>
+                  <span className="channel-ready-badge">✓ พร้อมส่ง</span>
+                </div>
+
+                {/* Channel 2: Email Client Mailto */}
+                <div className="channel-option email">
+                  <div className="channel-icon"><Mail size={18} color="#059669" /></div>
+                  <div className="channel-info">
+                    <strong>ส่งอีเมลเชิญทีม (Email Mailto)</strong>
+                    <small>เปิดอีเมลไคลเอนต์พร้อมข้อความและลิงก์ห้อง</small>
+                  </div>
+                  <a 
+                    href={generateMailtoLink()} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="channel-action-btn email"
+                  >
+                    เปิดอีเมล
+                  </a>
+                </div>
+
+                {/* Channel 3: LINE Bot & LINE Direct Share (Recommended in TH) */}
+                <div className="channel-option line" style={{ borderLeft: '4px solid #06C755' }}>
+                  <div className="channel-icon" style={{ background: '#e8f9ed', color: '#06C755' }}>
+                    <MessageSquare size={18} />
+                  </div>
+                  <div className="channel-info" style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                      <strong>ส่งแจ้งเตือนเข้ากลุ่ม LINE (LINE Bot)</strong>
+                      <button
+                        type="button"
+                        style={{ background: '#06C755', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                        onClick={() => openLineShare(getMeetingInviteText())}
+                        title="เปิดแอป LINE เพื่อเลือกกลุ่มหรือห้องแชทที่จะแชร์ข้อความทันที"
+                      >
+                        <MessageSquare size={12} /> แชร์เข้าแอป LINE ทันที
+                      </button>
+                    </div>
+                    <small style={{ display: 'block', color: '#64748b', margin: '4px 0 8px' }}>
+                      ยิงบอทอัตโนมัติด้วย LINE Messaging API (ใส่ Channel Token & Group ID) หรือกดแชร์เข้าแอป LINE ด้านบน
+                    </small>
+                    <div className="tg-inputs-row">
+                      <input 
+                        type="password"
+                        placeholder="LINE Channel Access Token"
+                        value={lineToken}
+                        onChange={e => setLineToken(e.target.value)}
+                        className="tg-small-input"
+                      />
+                      <input 
+                        type="text"
+                        placeholder="Group ID (C...) หรือ User ID (U...)"
+                        value={lineTargetId}
+                        onChange={e => setLineTargetId(e.target.value)}
+                        className="tg-small-input"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Channel 4: Telegram Bot Integration */}
+                <div className="channel-option telegram">
+                  <div className="channel-icon"><SendHorizontal size={18} color="#0284c7" /></div>
+                  <div className="channel-info">
+                    <strong>เชื่อมต่อ Telegram Bot</strong>
+                    <small>ส่งข้อความแจ้งเตือนเข้า Telegram Group / Channel</small>
+                    <div className="tg-inputs-row">
+                      <input 
+                        type="password"
+                        placeholder="Telegram Bot Token"
+                        value={telegramToken}
+                        onChange={e => setTelegramToken(e.target.value)}
+                        className="tg-small-input"
+                      />
+                      <input 
+                        type="text"
+                        placeholder="Telegram Chat / Group ID"
+                        value={telegramChatId}
+                        onChange={e => setTelegramChatId(e.target.value)}
+                        className="tg-small-input"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {inviteStatus && (
+                <div className="invite-status-banner">
+                  <Check size={16} /> <span>{inviteStatus}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="invite-dialog-footer">
+              <button 
+                type="button" 
+                className="secondary" 
+                onClick={() => setInviteOpen(false)}
+              >
+                ยกเลิก
+              </button>
+              <button 
+                type="button" 
+                className="primary" 
+                onClick={handleSendMeetingInvite}
+              >
+                <Bell size={15} /> ส่งเรียกประชุมทันที
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
